@@ -49,7 +49,11 @@ network requests.
  - Objects should include a URL to the slack object when
    applicable. If applicability is not obvious, ask.
 
-## 6. Implement basic message search
+## 6. Implement Query conversation
+ - given a message ID (MID), `clack thread MID` should output the
+   conversation thread's root message and all replies in the thread.
+
+## 7. Implement basic message search
 ### a. The initial implementation of search should support the following:
  - basic text query
  - user(s) - how can we make a user identifier easy for humans to type
@@ -61,3 +65,9 @@ Propose the Usage interface, then update this section once decided.
 
 ### c. Unit tests
 Implement unit tests accordingly. Ensure `make test` compiles and tests pass.
+
+## 8. Implement `make install`
+ - should install `clack` on the host machine according to conventions
+   of the host platform.
+ - we should plan to support MacOS, Ubuntu and Windows.
+ - for this phase, though, let's just support MacOS installs.
