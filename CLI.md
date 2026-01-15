@@ -168,6 +168,12 @@ Your Slack token must have appropriate OAuth scopes:
 - `im:history` - For direct messages
 - `mpim:history` - For group direct messages
 
+**Important:** Note the distinction between `:read` and `:history` scopes:
+- `:read` scopes (e.g., `channels:read`) only allow reading metadata like channel names, topics, and member lists
+- `:history` scopes are required to read actual message content
+
+If you have `channels:read` but get a "missing scope" error, you need to add `channels:history`.
+
 ## Output Formats
 
 ### Human Format (Default)
