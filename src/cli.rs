@@ -56,3 +56,107 @@ pub enum Commands {
         oldest: Option<String>,
     },
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_users_command_parsing() {
+        let cli = Cli::parse_from(["clack", "users"]);
+        assert!(matches!(cli.command, Commands::Users { .. }));
+        assert_eq!(cli.format, "human");
+        assert!(!cli.no_color);
+        assert!(!cli.verbose);
+    }
+
+    #[test]
+    fn test_users_command_with_options() {
+        let cli = Cli::parse_from(["clack", "users", "--limit", "50", "--include-deleted"]);
+        match cli.command {
+            Commands::Users {
+                limit,
+                include_deleted,
+            } => {
+                assert_eq!(limit, Some(50));
+                assert!(include_deleted);
+            }
+            _ => panic!("Expected Users command"),
+        }
+    }
+
+    #[test]
+    fn test_user_command_with_id() {
+        let cli = Cli::parse_from(["clack", "user", "U123"]);
+        match cli.command {
+            Commands::User { user_id } => assert_eq!(user_id, "U123"),
+            _ => panic!("Expected User command"),
+        }
+    }
+
+    #[test]
+    fn test_messages_command_basic() {
+        let cli = Cli::parse_from(["clack", "messages", "C123"]);
+        match cli.command {
+            Commands::Messages {
+                channel,
+                limit,
+                latest,
+                oldest,
+            } => {
+                assert_eq!(channel, "C123");
+                assert_eq!(limit, 100); // default value
+                assert_eq!(latest, None);
+                assert_eq!(oldest, None);
+            }
+            _ => panic!("Expected Messages command"),
+        }
+    }
+
+    #[test]
+    fn test_messages_command_with_options() {
+        let cli = Cli::parse_from([
+            "clack",
+            "messages",
+            "C123",
+            "--limit",
+            "50",
+            "--latest",
+            "1234567890",
+            "--oldest",
+            "1234567800",
+        ]);
+        match cli.command {
+            Commands::Messages {
+                channel,
+                limit,
+                latest,
+                oldest,
+            } => {
+                assert_eq!(channel, "C123");
+                assert_eq!(limit, 50);
+                assert_eq!(latest, Some("1234567890".to_string()));
+                assert_eq!(oldest, Some("1234567800".to_string()));
+            }
+            _ => panic!("Expected Messages command"),
+        }
+    }
+
+    #[test]
+    fn test_global_format_option() {
+        let cli = Cli::parse_from(["clack", "--format", "json", "users"]);
+        assert_eq!(cli.format, "json");
+    }
+
+    #[test]
+    fn test_global_no_color_option() {
+        let cli = Cli::parse_from(["clack", "--no-color", "users"]);
+        assert!(cli.no_color);
+    }
+
+    #[test]
+    fn test_global_verbose_option() {
+        let cli = Cli::parse_from(["clack", "-v", "users"]);
+        assert!(cli.verbose);
+    }
+}
