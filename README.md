@@ -7,8 +7,28 @@ output that is human readable by default, but support many other
 standard formats for ease of machine parsing.
 
 # Usage
-TBD: Claude should propose conventions and concrete Usage based on the
-following sections.
+
+See [CLI.md](./CLI.md) for complete interface documentation and examples.
+
+## Quick Start
+
+```bash
+# Set your Slack API token
+export SLACK_TOKEN=xoxb-your-token-here
+
+# List all users
+clack users
+
+# Get a specific user
+clack user U1234ABCD
+
+# Get messages from a channel
+clack messages C1234ABCD
+
+# Export as JSON or YAML
+clack users --format json
+clack messages general --format yaml
+```
 
 # Interface Design
  - Should follow git cli conventions, e.g.
@@ -34,3 +54,7 @@ it.
 ## Forward Looking
 Caching Slack objects might be useful in the future, so let's plan to
 integrate an ORM backed by a SQLite database at some point.
+
+# Reference
+## Slack API Docs
+https://docs.slack.dev/reference/methods
