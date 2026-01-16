@@ -41,7 +41,7 @@ Lists all users in the workspace with colorized, human-readable output showing:
 
 **Options:**
 - `--format <format>` - Output format: `human` (default), `json`, `yaml`
-- `--limit <n>` - Limit number of results (default: all)
+- `--limit <n>` - Limit number of results (default: 200)
 - `--include-deleted` - Include deleted/deactivated users
 
 **Examples:**
@@ -101,19 +101,25 @@ Lists messages from a channel with human-readable output showing:
 - Link to message in Slack
 
 **Arguments:**
-- `<channel>` - Channel ID (e.g., C1234ABCD) or channel name (e.g., #general)
+- `<channel>` - Channel ID (C1234ABCD), name with # (#general), or name without # (general)
 
 **Options:**
 - `--format <format>` - Output format: `human` (default), `json`, `yaml`
-- `--limit <n>` - Number of messages to retrieve (default: 100)
+- `--limit <n>` - Number of messages to retrieve (default: 200)
 - `--latest <timestamp>` - End of time range (default: now)
 - `--oldest <timestamp>` - Start of time range
 - `--include-threads` - Include all thread replies inline
 
 **Examples:**
 ```bash
-# Get last 100 messages from a channel
+# Get last 100 messages from a channel by ID
 clack messages C1234ABCD
+
+# Get messages using channel name
+clack messages general
+
+# Get messages using # prefix
+clack messages #general
 
 # Get last 50 messages as JSON
 clack messages general --limit 50 --format json
@@ -122,6 +128,71 @@ clack messages general --limit 50 --format json
 clack messages C1234ABCD --oldest 1609459200 --latest 1609545600
 ```
 
+**Performance Note:**
+When using channel names (like `general` or `#firmware-team`) instead of channel IDs, the tool must first resolve the name to an ID by searching through all channels. This adds extra API calls before fetching messages:
+- Using channel ID (`C1234ABCD`): 1 API call (instant)
+- Using channel name (`firmware-team`): Multiple API calls to find the channel, then 1 call for messages
+
+For better performance, especially in large workspaces:
+1. Use channel IDs directly when known
+2. Use `clack channels --format json` to get all channel IDs once and cache them
+3. The tool stops searching as soon as it finds the channel (optimized)
+
+The `--limit` parameter only affects the number of messages retrieved, not the channel lookup.
+
+### Threads
+
+#### Get a conversation thread
+```bash
+clack thread <channel> <message_ts>
+```
+
+Retrieves a conversation thread including the root message and all replies. Threads in Slack are conversations that branch off from a message.
+
+**Arguments:**
+- `<channel>` - Channel ID (C1234ABCD), name with # (#general), or name without # (general)
+- `<message_ts>` - Message timestamp/ID (e.g., `1234567890.123456`)
+
+**Options:**
+- `--format <format>` - Output format: `human` (default), `json`, `yaml`
+
+**Examples:**
+```bash
+# Get a thread using channel ID
+clack thread C1234ABCD 1234567890.123456
+
+# Get a thread using channel name
+clack thread general 1234567890.123456
+
+# Get a thread using # prefix
+clack thread #general 1234567890.123456
+
+# Export thread as JSON
+clack thread C1234ABCD 1234567890.123456 --format json
+
+# Get thread with colorization disabled
+clack thread general 1234567890.123456 --no-color
+```
+
+**Finding Message Timestamps:**
+When using the `messages` command, each message displays its timestamp and a URL. You can use this timestamp with the `thread` command:
+```bash
+# First, get messages from a channel
+clack messages general
+
+# Then use a message timestamp to get its thread
+clack thread general 1234567890.123456
+```
+
+**Performance Note:**
+Like the `messages` command, using channel names requires resolving the name to an ID first. For better performance in large workspaces, use channel IDs directly (e.g., `clack thread C1234ABCD 1234567890.123456`).
+
+**Required Scopes:**
+- `channels:history` - For threads in public channels
+- `groups:history` - For threads in private channels
+- `im:history` - For threads in direct messages
+- `mpim:history` - For threads in group direct messages
+
 ## Global Options
 
 These options work with any command:
@@ -129,8 +200,38 @@ These options work with any command:
 - `--help`, `-h` - Display help information
 - `--version`, `-V` - Display version information
 - `--no-color` - Disable colorized output
-- `--verbose`, `-v` - Enable verbose logging
-- `--quiet`, `-q` - Suppress non-essential output
+- `--verbose`, `-v` - Enable verbose API logging (shows request URLs, parameters, response status, duration, and size)
+- `--format <format>` - Output format: `human` (default), `json`, `yaml`
+
+### Verbose Mode
+
+When `--verbose` is enabled, every API request will log detailed information to stderr:
+
+**Request logging:**
+```
+→ GET https://slack.com/api/users.list
+  Query: limit=200
+```
+
+**Response logging:**
+```
+← 200 (245ms, 15234 bytes)
+```
+
+This is useful for:
+- Debugging API issues
+- Understanding which API calls are being made
+- Monitoring rate limits and performance
+- Troubleshooting authentication or scope problems
+
+**Example:**
+```bash
+# Normal output
+clack users --limit 5
+
+# With verbose logging
+clack users --limit 5 --verbose
+```
 
 ## Authentication
 
@@ -206,12 +307,61 @@ Clack provides clear error messages:
 
 All errors are written to stderr, keeping stdout clean for piping.
 
+### Channels
+
+#### List all channels
+```bash
+clack channels
+```
+
+Lists all channels that the bot has access to, including both public and private channels (if the bot is a member).
+
+**Options:**
+- `--include-archived` - Include archived channels in the list
+- `--format <format>` - Output format: `human` (default), `json`, `yaml`
+
+**Examples:**
+```bash
+# List all active channels
+clack channels
+
+# Include archived channels
+clack channels --include-archived
+
+# Export as JSON
+clack channels --format json
+
+# Find a specific channel
+clack channels | grep firmware
+```
+
+**Output includes:**
+- Channel name with # prefix
+- Channel ID
+- Privacy status (🔒 for private channels)
+- Archived status (📦 for archived)
+- Topic and member count
+
+**Pagination:**
+This command automatically fetches ALL channels using pagination, so you'll see every channel the bot has access to, even if you have hundreds of channels.
+
+**Rate Limiting:**
+If Slack's rate limits are hit, the tool will automatically retry with exponential backoff (up to 3 retries). You'll see a message like:
+```
+Rate limited. Waiting 1 second(s) before retry 1/3...
+```
+
+For large workspaces with many channels, the initial channel name resolution may take a few seconds to paginate through all channels.
+
+**Required Scopes:**
+- `channels:read` - For public channels
+- `groups:read` - For private channels
+
 ## Future Commands (Not Yet Implemented)
 
 These commands are planned for future releases:
 
 ```bash
-clack channels          # List channels
-clack channel <id>      # Get channel info
-clack search <query>    # Search messages (Phase 6)
+clack channel <id>      # Get detailed channel info
+clack search <query>    # Search messages (Phase 7)
 ```

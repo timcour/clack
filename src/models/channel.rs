@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Channel {
     pub id: String,
     pub name: String,
@@ -15,12 +15,12 @@ pub struct Channel {
     pub num_members: Option<u32>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ChannelTopic {
     pub value: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ChannelPurpose {
     pub value: String,
 }
@@ -30,4 +30,17 @@ pub struct ChannelInfoResponse {
     pub ok: bool,
     pub channel: Channel,
     pub error: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ChannelsListResponse {
+    pub ok: bool,
+    pub channels: Vec<Channel>,
+    pub error: Option<String>,
+    pub response_metadata: Option<ResponseMetadata>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ResponseMetadata {
+    pub next_cursor: Option<String>,
 }

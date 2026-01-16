@@ -4,14 +4,10 @@ use anyhow::Result;
 
 pub async fn list_users(
     client: &SlackClient,
-    limit: Option<u32>,
+    limit: u32,
     include_deleted: bool,
 ) -> Result<Vec<User>> {
-    let mut query = vec![];
-
-    if let Some(limit) = limit {
-        query.push(("limit", limit.to_string()));
-    }
+    let query = vec![("limit", limit.to_string())];
 
     let response: UsersListResponse = client.get("users.list", &query).await?;
 
@@ -45,7 +41,7 @@ mod tests {
     async fn setup() -> (mockito::ServerGuard, SlackClient) {
         let server = mockito::Server::new_async().await;
         std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
-        let client = SlackClient::with_base_url(&server.url()).unwrap();
+        let client = SlackClient::with_base_url(&server.url(), false).unwrap();
         (server, client)
     }
 
@@ -54,7 +50,7 @@ mod tests {
         let (mut server, client) = setup().await;
 
         let _mock = server
-            .mock("GET", "/users.list")
+            .mock("GET", "/users.list?limit=200")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(
@@ -76,7 +72,7 @@ mod tests {
             .create_async()
             .await;
 
-        let users = list_users(&client, None, false).await.unwrap();
+        let users = list_users(&client, 200, false).await.unwrap();
         assert_eq!(users.len(), 1);
         assert_eq!(users[0].id, "U123");
         assert_eq!(users[0].name, "testuser");
@@ -87,7 +83,7 @@ mod tests {
         let (mut server, client) = setup().await;
 
         let _mock = server
-            .mock("GET", "/users.list")
+            .mock("GET", "/users.list?limit=200")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(
@@ -117,12 +113,12 @@ mod tests {
             .await;
 
         // Without include_deleted, should only get active user
-        let users = list_users(&client, None, false).await.unwrap();
+        let users = list_users(&client, 200, false).await.unwrap();
         assert_eq!(users.len(), 1);
         assert_eq!(users[0].id, "U123");
 
         // With include_deleted, should get both
-        let users = list_users(&client, None, true).await.unwrap();
+        let users = list_users(&client, 200, true).await.unwrap();
         assert_eq!(users.len(), 2);
     }
 
@@ -143,7 +139,7 @@ mod tests {
             .create_async()
             .await;
 
-        let _users = list_users(&client, Some(10), false).await.unwrap();
+        let _users = list_users(&client, 10, false).await.unwrap();
     }
 
     #[tokio::test]

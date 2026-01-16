@@ -26,8 +26,8 @@ pub enum Commands {
     /// List all users
     Users {
         /// Maximum number of users to return
-        #[arg(long)]
-        limit: Option<u32>,
+        #[arg(long, default_value = "200")]
+        limit: u32,
 
         /// Include deleted/deactivated users
         #[arg(long)]
@@ -44,7 +44,7 @@ pub enum Commands {
         channel: String,
 
         /// Number of messages to retrieve
-        #[arg(long, default_value = "100")]
+        #[arg(long, default_value = "200")]
         limit: u32,
 
         /// End of time range (Unix timestamp)
@@ -54,6 +54,20 @@ pub enum Commands {
         /// Start of time range (Unix timestamp)
         #[arg(long)]
         oldest: Option<String>,
+    },
+    /// Get a conversation thread and all its replies
+    Thread {
+        /// Channel ID or name (e.g., C1234ABCD, #general, or general)
+        channel: String,
+
+        /// Message timestamp/ID (e.g., 1234567890.123456)
+        message_ts: String,
+    },
+    /// List all channels the bot has access to
+    Channels {
+        /// Include archived channels
+        #[arg(long)]
+        include_archived: bool,
     },
 }
 
@@ -78,7 +92,7 @@ mod tests {
                 limit,
                 include_deleted,
             } => {
-                assert_eq!(limit, Some(50));
+                assert_eq!(limit, 50);
                 assert!(include_deleted);
             }
             _ => panic!("Expected Users command"),
@@ -105,7 +119,7 @@ mod tests {
                 oldest,
             } => {
                 assert_eq!(channel, "C123");
-                assert_eq!(limit, 100); // default value
+                assert_eq!(limit, 200); // default value
                 assert_eq!(latest, None);
                 assert_eq!(oldest, None);
             }
@@ -158,5 +172,57 @@ mod tests {
     fn test_global_verbose_option() {
         let cli = Cli::parse_from(["clack", "-v", "users"]);
         assert!(cli.verbose);
+    }
+
+    #[test]
+    fn test_thread_command() {
+        let cli = Cli::parse_from(["clack", "thread", "C123", "1234567890.123456"]);
+        match cli.command {
+            Commands::Thread {
+                channel,
+                message_ts,
+            } => {
+                assert_eq!(channel, "C123");
+                assert_eq!(message_ts, "1234567890.123456");
+            }
+            _ => panic!("Expected Thread command"),
+        }
+    }
+
+    #[test]
+    fn test_thread_command_with_channel_name() {
+        let cli = Cli::parse_from(["clack", "thread", "#general", "1234567890.123456"]);
+        match cli.command {
+            Commands::Thread {
+                channel,
+                message_ts,
+            } => {
+                assert_eq!(channel, "#general");
+                assert_eq!(message_ts, "1234567890.123456");
+            }
+            _ => panic!("Expected Thread command"),
+        }
+    }
+
+    #[test]
+    fn test_channels_command() {
+        let cli = Cli::parse_from(["clack", "channels"]);
+        match cli.command {
+            Commands::Channels { include_archived } => {
+                assert!(!include_archived);
+            }
+            _ => panic!("Expected Channels command"),
+        }
+    }
+
+    #[test]
+    fn test_channels_command_with_archived() {
+        let cli = Cli::parse_from(["clack", "channels", "--include-archived"]);
+        match cli.command {
+            Commands::Channels { include_archived } => {
+                assert!(include_archived);
+            }
+            _ => panic!("Expected Channels command"),
+        }
     }
 }
