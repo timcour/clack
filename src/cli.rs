@@ -141,6 +141,15 @@ pub enum SearchType {
         #[arg(long, default_value = "200")]
         limit: u32,
     },
+    /// Search channels by name
+    Channels {
+        /// Search query (channel name substring)
+        query: String,
+
+        /// Include archived channels
+        #[arg(long)]
+        include_archived: bool,
+    },
 }
 
 #[cfg(test)]
@@ -394,6 +403,42 @@ mod tests {
                     assert_eq!(limit, 200);
                 }
                 _ => panic!("Expected All search type"),
+            },
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_channels() {
+        let cli = Cli::parse_from(["clack", "search", "channels", "engineering"]);
+        match cli.command {
+            Commands::Search { search_type } => match search_type {
+                SearchType::Channels {
+                    query,
+                    include_archived,
+                } => {
+                    assert_eq!(query, "engineering");
+                    assert!(!include_archived);
+                }
+                _ => panic!("Expected Channels search type"),
+            },
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_channels_with_archived() {
+        let cli = Cli::parse_from(["clack", "search", "channels", "old-project", "--include-archived"]);
+        match cli.command {
+            Commands::Search { search_type } => match search_type {
+                SearchType::Channels {
+                    query,
+                    include_archived,
+                } => {
+                    assert_eq!(query, "old-project");
+                    assert!(include_archived);
+                }
+                _ => panic!("Expected Channels search type"),
             },
             _ => panic!("Expected Search command"),
         }

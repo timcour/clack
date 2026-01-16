@@ -193,6 +193,18 @@ async fn main() -> Result<()> {
                     _ => output::search_formatter::format_search_all(&response, cli.no_color)?,
                 }
             }
+            SearchType::Channels {
+                query,
+                include_archived,
+            } => {
+                let channels = api::channels::search_channels(&client, &query, include_archived).await?;
+
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&channels)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&channels)?),
+                    _ => output::search_formatter::format_channel_search_results(&query, &channels, cli.no_color)?,
+                }
+            }
         },
     }
 

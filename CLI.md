@@ -463,6 +463,46 @@ clack search all "budget 2024" --channel finance
 clack search all "project alpha" --format json
 ```
 
+#### Search channels by name
+```bash
+clack search channels <query>
+```
+
+Searches for channels by name (case-insensitive substring matching). This is useful for quickly finding channels when you remember part of the name but not the full name.
+
+**Arguments:**
+- `<query>` - Channel name substring to search for (case-insensitive)
+
+**Options:**
+- `--include-archived` - Include archived channels in search results
+- `--format <format>` - Output format: `human` (default), `json`, `yaml`
+
+**Examples:**
+```bash
+# Search for channels with "eng" in the name
+clack search channels eng
+# Results: #engineering, #engineering-ops, #backend-eng, etc.
+
+# Search for channels with "dab" in the name
+clack search channels dab
+
+# Include archived channels
+clack search channels old-project --include-archived
+
+# Export results as JSON
+clack search channels team --format json
+```
+
+**Output includes:**
+- Channel name with # prefix
+- Channel ID
+- Privacy status (🔒 for private channels)
+- Archived status (📦 for archived)
+- Topic and purpose
+- Member count
+
+**Note:** This command searches locally through all channels the bot has access to. It performs case-insensitive substring matching, so searching for "eng" will match "engineering", "backend-eng", "EngOps", etc.
+
 **Search Query Syntax:**
 
 The search commands use Slack's search modifier syntax. Filters are automatically combined with your query:

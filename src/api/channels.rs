@@ -120,6 +120,24 @@ pub async fn get_channel(client: &SlackClient, channel_id: &str) -> Result<Chann
     Ok(response.channel)
 }
 
+/// Search for channels by name substring (case-insensitive)
+pub async fn search_channels(
+    client: &SlackClient,
+    query: &str,
+    include_archived: bool,
+) -> Result<Vec<Channel>> {
+    let all_channels = fetch_all_channels(client, include_archived).await?;
+    let query_lower = query.to_lowercase();
+
+    // Filter channels that contain the query string (case-insensitive)
+    let matching_channels: Vec<Channel> = all_channels
+        .into_iter()
+        .filter(|channel| channel.name.to_lowercase().contains(&query_lower))
+        .collect();
+
+    Ok(matching_channels)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -372,5 +390,86 @@ mod tests {
         assert_eq!(channels[0].id, "C1");
         assert_eq!(channels[1].id, "C2");
         assert_eq!(channels[2].id, "C3");
+    }
+
+    #[tokio::test]
+    async fn test_search_channels() {
+        let (mut server, client) = setup().await;
+
+        let _mock = server
+            .mock("GET", "/conversations.list")
+            .match_query(mockito::Matcher::AllOf(vec![
+                mockito::Matcher::UrlEncoded("limit".into(), "200".into()),
+                mockito::Matcher::UrlEncoded("types".into(), "public_channel,private_channel".into()),
+                mockito::Matcher::UrlEncoded("exclude_archived".into(), "true".into()),
+            ]))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{
+                "ok": true,
+                "channels": [
+                    {"id": "C1", "name": "engineering", "is_channel": true},
+                    {"id": "C2", "name": "engineering-ops", "is_channel": true},
+                    {"id": "C3", "name": "marketing", "is_channel": true},
+                    {"id": "C4", "name": "sales", "is_channel": true}
+                ],
+                "response_metadata": {
+                    "next_cursor": ""
+                }
+            }"#,
+            )
+            .create_async()
+            .await;
+
+        let results = search_channels(&client, "eng", false).await.unwrap();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].name, "engineering");
+        assert_eq!(results[1].name, "engineering-ops");
+
+        let results2 = search_channels(&client, "market", false).await.unwrap();
+        assert_eq!(results2.len(), 1);
+        assert_eq!(results2[0].name, "marketing");
+
+        let results3 = search_channels(&client, "xyz", false).await.unwrap();
+        assert_eq!(results3.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_search_channels_case_insensitive() {
+        let (mut server, client) = setup().await;
+
+        let _mock = server
+            .mock("GET", "/conversations.list")
+            .match_query(mockito::Matcher::AllOf(vec![
+                mockito::Matcher::UrlEncoded("limit".into(), "200".into()),
+                mockito::Matcher::UrlEncoded("types".into(), "public_channel,private_channel".into()),
+                mockito::Matcher::UrlEncoded("exclude_archived".into(), "true".into()),
+            ]))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{
+                "ok": true,
+                "channels": [
+                    {"id": "C1", "name": "Engineering", "is_channel": true},
+                    {"id": "C2", "name": "MARKETING", "is_channel": true}
+                ],
+                "response_metadata": {
+                    "next_cursor": ""
+                }
+            }"#,
+            )
+            .create_async()
+            .await;
+
+        // Search should be case-insensitive
+        let results = search_channels(&client, "eng", false).await.unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].name, "Engineering");
+
+        let results2 = search_channels(&client, "MARK", false).await.unwrap();
+        assert_eq!(results2.len(), 1);
+        assert_eq!(results2[0].name, "MARKETING");
     }
 }
