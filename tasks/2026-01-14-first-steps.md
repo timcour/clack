@@ -53,15 +53,27 @@ network requests.
  - given a message ID (MID), `clack thread MID` should output the
    conversation thread's root message and all replies in the thread.
 
-## 7. Implement basic message search
+## 7. Implement basic search
 ### a. The initial implementation of search should support the following:
  - basic text query
  - user(s) - how can we make a user identifier easy for humans to type
    (it doesn't _need_ to be the actual Slack ID of the object)?
    the standard "from", "with", etc. Slack search keywords should be supported.
  - channel - which channel should be searched?
+ - the type of object to search for: channel (conversations api),
+   messages, files, all.
+
 ### b. Usage of the `clack search` feature
 Propose the Usage interface, then update this section once decided.
+
+Suggested example usage:
+
+``` shell
+clack search channels 'query string'
+clack search messages 'query string'
+clack search files 'query string'
+clack serch all 'query string'
+```
 
 ### c. Unit tests
 Implement unit tests accordingly. Ensure `make test` compiles and tests pass.
