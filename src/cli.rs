@@ -54,6 +54,10 @@ pub enum Commands {
         /// Start of time range (Unix timestamp)
         #[arg(long)]
         oldest: Option<String>,
+
+        /// Use cached messages if available (default: always fetch fresh)
+        #[arg(long)]
+        use_cache: bool,
     },
     /// Get a conversation thread and all its replies
     Thread {
@@ -62,6 +66,10 @@ pub enum Commands {
 
         /// Message timestamp/ID (e.g., 1234567890.123456)
         message_ts: String,
+
+        /// Use cached messages if available (default: always fetch fresh)
+        #[arg(long)]
+        use_cache: bool,
     },
     /// List all channels the bot has access to
     Channels {
@@ -209,11 +217,13 @@ mod tests {
                 limit,
                 latest,
                 oldest,
+                use_cache,
             } => {
                 assert_eq!(channel, "C123");
                 assert_eq!(limit, 200); // default value
                 assert_eq!(latest, None);
                 assert_eq!(oldest, None);
+                assert_eq!(use_cache, false); // default value
             }
             _ => panic!("Expected Messages command"),
         }
@@ -238,11 +248,13 @@ mod tests {
                 limit,
                 latest,
                 oldest,
+                use_cache,
             } => {
                 assert_eq!(channel, "C123");
                 assert_eq!(limit, 50);
                 assert_eq!(latest, Some("1234567890".to_string()));
                 assert_eq!(oldest, Some("1234567800".to_string()));
+                assert_eq!(use_cache, false);
             }
             _ => panic!("Expected Messages command"),
         }
@@ -273,9 +285,11 @@ mod tests {
             Commands::Thread {
                 channel,
                 message_ts,
+                use_cache,
             } => {
                 assert_eq!(channel, "C123");
                 assert_eq!(message_ts, "1234567890.123456");
+                assert_eq!(use_cache, false); // default value
             }
             _ => panic!("Expected Thread command"),
         }
@@ -288,9 +302,11 @@ mod tests {
             Commands::Thread {
                 channel,
                 message_ts,
+                use_cache,
             } => {
                 assert_eq!(channel, "#general");
                 assert_eq!(message_ts, "1234567890.123456");
+                assert_eq!(use_cache, false);
             }
             _ => panic!("Expected Thread command"),
         }
