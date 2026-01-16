@@ -14,6 +14,10 @@ anyhow = "1.0"
 termcolor = "1.4"
 textwrap = "0.16"
 chrono = "0.4"
+diesel = { version = "2.1", features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
+diesel-async = { version = "0.4", features = ["async-connection-wrapper", "deadpool"] }
+diesel_migrations = "2.1"
+dirs = "5.0"
 
 [dev-dependencies]
 mockito = "1.2"
