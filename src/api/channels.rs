@@ -20,7 +20,30 @@ pub async fn resolve_channel_id(client: &SlackClient, identifier: &str) -> Resul
 }
 
 async fn list_channels_and_find(client: &SlackClient, name: &str) -> Result<String> {
-    // Search for channel with pagination, stopping when found
+    let workspace_id = client
+        .workspace_id()
+        .ok_or_else(|| anyhow::anyhow!("Workspace ID not initialized"))?;
+
+    // Try cache first to avoid API calls
+    if let Some(pool) = client.cache_pool() {
+        if let Ok(mut conn) = cache::get_connection(pool).await {
+            if let Ok(Some(cached_channels)) = cache::operations::get_conversations(&mut conn, workspace_id, client.verbose()) {
+                // Search cached channels first
+                if let Some(channel) = cached_channels.iter().find(|ch| ch.name == name) {
+                    if client.verbose() {
+                        eprintln!("[CACHE] Channel '{}' resolved from cache to {}", name, channel.id);
+                    }
+                    return Ok(channel.id.clone());
+                }
+            }
+        }
+    }
+
+    // Not in cache - search with pagination, stopping when found
+    if client.verbose() {
+        eprintln!("[API] Searching for channel '{}' via conversations.list", name);
+    }
+
     let mut cursor: Option<String> = None;
     let mut total_checked = 0;
 
@@ -41,10 +64,21 @@ async fn list_channels_and_find(client: &SlackClient, name: &str) -> Result<Stri
             anyhow::bail!("Slack API error: {}", response.error.unwrap_or_default());
         }
 
-        total_checked += response.channels.len();
+        let channels = response.channels;
+        total_checked += channels.len();
+
+        // Cache this batch immediately
+        if let Some(pool) = client.cache_pool() {
+            if let Ok(mut conn) = cache::get_connection(pool).await {
+                let _ = cache::operations::upsert_conversations(&mut conn, workspace_id, &channels, client.verbose());
+            }
+        }
 
         // Check if we found the channel in this batch
-        if let Some(channel) = response.channels.iter().find(|ch| ch.name == name) {
+        if let Some(channel) = channels.iter().find(|ch| ch.name == name) {
+            if client.verbose() {
+                eprintln!("[API] Channel '{}' found with ID {}", name, channel.id);
+            }
             return Ok(channel.id.clone());
         }
 

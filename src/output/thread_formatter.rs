@@ -35,7 +35,7 @@ pub fn format_thread(
     writer.print_colored("ROOT MESSAGE", Color::Green)?;
     writer.writeln()?;
     writer.print_separator()?;
-    format_message(root, &channel.id, users, writer, false)?;
+    format_message(root, &channel.name, &channel.id, users, writer, false)?;
 
     // Format replies if there are any
     if messages.len() > 1 {
@@ -48,7 +48,7 @@ pub fn format_thread(
         writer.print_separator()?;
 
         for (i, msg) in messages.iter().skip(1).enumerate() {
-            format_message(msg, &channel.id, users, writer, true)?;
+            format_message(msg, &channel.name, &channel.id, users, writer, true)?;
 
             if i < messages.len() - 2 {
                 writer.writeln()?;
@@ -72,6 +72,7 @@ pub fn format_thread(
 
 fn format_message(
     msg: &Message,
+    channel_name: &str,
     channel_id: &str,
     users: &HashMap<String, User>,
     writer: &mut ColorWriter,
@@ -84,11 +85,39 @@ fn format_message(
     let ts_float: f64 = msg.ts.parse().unwrap_or(0.0);
     let dt_utc = DateTime::from_timestamp(ts_float as i64, 0).unwrap_or_default();
     let dt_local: DateTime<Local> = dt_utc.into();
-    let time_str = dt_local.format("%Y-%m-%d %H:%M:%S %Z").to_string();
 
-    // Timestamp in yellow
+    // Calculate time difference
+    let now = Local::now();
+    let duration = now.signed_duration_since(dt_local);
+
+    // Format timestamp based on age
+    let time_str = if duration.num_hours() < 24 {
+        // Less than 1 day old - use "N units ago"
+        if duration.num_minutes() < 1 {
+            "just now".to_string()
+        } else if duration.num_minutes() < 60 {
+            let mins = duration.num_minutes();
+            if mins == 1 {
+                "1 minute ago".to_string()
+            } else {
+                format!("{} minutes ago", mins)
+            }
+        } else {
+            let hours = duration.num_hours();
+            if hours == 1 {
+                "1 hour ago".to_string()
+            } else {
+                format!("{} hours ago", hours)
+            }
+        }
+    } else {
+        // More than 1 day old - use 24-hour clock without offset
+        dt_local.format("%Y-%m-%d %H:%M:%S").to_string()
+    };
+
+    // Channel name in green
     writer.write(indent)?;
-    writer.print_colored(&time_str, Color::Yellow)?;
+    writer.print_colored(&format!("#{}", channel_name), Color::Green)?;
     writer.write(" ")?;
 
     // User handle (name) in cyan, or ID if user not found
@@ -102,6 +131,10 @@ fn format_message(
     } else {
         writer.print_colored("<system>", Color::White)?;
     }
+    writer.write(" ")?;
+
+    // Timestamp in yellow
+    writer.print_colored(&time_str, Color::Yellow)?;
     writer.writeln()?;
 
     // Message text wrapped to appropriate width (accounting for indent)
@@ -260,7 +293,7 @@ mod tests {
         let message = create_test_message("1234567891.123456", Some("U123"), "This is a reply", Some("1234567890.123456"));
 
         let mut writer = ColorWriter::new(true);
-        format_message(&message, &channel.id, &users, &mut writer, true).unwrap();
+        format_message(&message, &channel.name, &channel.id, &users, &mut writer, true).unwrap();
 
         // Test that reply formatting works (indented)
     }
@@ -279,7 +312,7 @@ mod tests {
         ]);
 
         let mut writer = ColorWriter::new(true);
-        format_message(&message, &channel.id, &users, &mut writer, false).unwrap();
+        format_message(&message, &channel.name, &channel.id, &users, &mut writer, false).unwrap();
 
         // Test passes if no panic
     }
