@@ -111,40 +111,10 @@ pub async fn list_channels(client: &SlackClient, include_archived: bool) -> Resu
         .workspace_id()
         .ok_or_else(|| anyhow::anyhow!("Workspace ID not initialized"))?;
 
-    // Try cache first
-    if let Some(pool) = client.cache_pool() {
-        match cache::get_connection(pool).await {
-            Ok(mut conn) => {
-                match cache::operations::get_conversations(&mut conn, workspace_id, client.verbose()) {
-                    Ok(Some(cached_channels)) => {
-                        let mut channels = cached_channels;
-                        if !include_archived {
-                            channels.retain(|c| !c.is_archived.unwrap_or(false));
-                        }
-                        return Ok(channels);
-                    }
-                    Ok(None) => {
-                        // Cache miss, continue to API
-                    }
-                    Err(e) => {
-                        if client.verbose() {
-                            eprintln!("[CACHE] Error reading cache: {}", e);
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                if client.verbose() {
-                    eprintln!("[CACHE] Failed to get connection: {}", e);
-                }
-            }
-        }
-    }
-
-    // Fetch from API
+    // Always fetch from API for list operations
     let channels = fetch_all_channels(client, include_archived).await?;
 
-    // Write through to cache
+    // Write through to cache (best effort, don't fail on cache errors)
     if let Some(pool) = client.cache_pool() {
         if let Ok(mut conn) = cache::get_connection(pool).await {
             let _ = cache::operations::upsert_conversations(&mut conn, workspace_id, &channels, client.verbose());

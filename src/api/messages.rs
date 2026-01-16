@@ -8,49 +8,12 @@ pub async fn list_messages(
     limit: u32,
     latest: Option<String>,
     oldest: Option<String>,
-    use_cache: bool,
 ) -> Result<Vec<Message>> {
     let workspace_id = client
         .workspace_id()
         .ok_or_else(|| anyhow::anyhow!("Workspace ID not initialized"))?;
 
-    // Try cache first if use_cache is true
-    if use_cache {
-        if let Some(pool) = client.cache_pool() {
-            match crate::cache::get_connection(pool).await {
-                Ok(mut conn) => {
-                    match crate::cache::operations::get_messages(
-                        &mut conn,
-                        workspace_id,
-                        channel,
-                        client.verbose(),
-                    ) {
-                        Ok(Some(cached_messages)) => {
-                            let mut messages = cached_messages;
-                            // Apply limit
-                            messages.truncate(limit as usize);
-                            return Ok(messages);
-                        }
-                        Ok(None) => {
-                            // Cache miss or stale, continue to API
-                        }
-                        Err(e) => {
-                            if client.verbose() {
-                                eprintln!("[CACHE] Error reading cache: {}", e);
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    if client.verbose() {
-                        eprintln!("[CACHE] Failed to get connection: {}", e);
-                    }
-                }
-            }
-        }
-    }
-
-    // Fetch from API
+    // Always fetch from API for list operations
     let mut query = vec![
         ("channel", channel.to_string()),
         ("limit", limit.to_string()),
@@ -71,18 +34,16 @@ pub async fn list_messages(
 
     let messages = response.messages;
 
-    // Write through to cache if use_cache is true (best effort, don't fail on cache errors)
-    if use_cache {
-        if let Some(pool) = client.cache_pool() {
-            if let Ok(mut conn) = crate::cache::get_connection(pool).await {
-                let _ = crate::cache::operations::upsert_messages(
-                    &mut conn,
-                    workspace_id,
-                    channel,
-                    &messages,
-                    client.verbose(),
-                );
-            }
+    // Write through to cache (best effort, don't fail on cache errors)
+    if let Some(pool) = client.cache_pool() {
+        if let Ok(mut conn) = crate::cache::get_connection(pool).await {
+            let _ = crate::cache::operations::upsert_messages(
+                &mut conn,
+                workspace_id,
+                channel,
+                &messages,
+                client.verbose(),
+            );
         }
     }
 
@@ -93,59 +54,12 @@ pub async fn get_thread(
     client: &SlackClient,
     channel: &str,
     thread_ts: &str,
-    use_cache: bool,
 ) -> Result<Vec<Message>> {
     let workspace_id = client
         .workspace_id()
         .ok_or_else(|| anyhow::anyhow!("Workspace ID not initialized"))?;
 
-    // Try cache first if use_cache is true
-    if use_cache {
-        if let Some(pool) = client.cache_pool() {
-            match crate::cache::get_connection(pool).await {
-                Ok(mut conn) => {
-                    // For threads, we get all messages from this channel and filter by thread_ts
-                    match crate::cache::operations::get_messages(
-                        &mut conn,
-                        workspace_id,
-                        channel,
-                        client.verbose(),
-                    ) {
-                        Ok(Some(cached_messages)) => {
-                            // Filter for messages in this thread (where thread_ts matches or ts matches for root)
-                            let thread_messages: Vec<Message> = cached_messages
-                                .into_iter()
-                                .filter(|m| {
-                                    m.ts == thread_ts
-                                        || m.thread_ts.as_ref().map(|t| t == thread_ts).unwrap_or(false)
-                                })
-                                .collect();
-
-                            if !thread_messages.is_empty() {
-                                return Ok(thread_messages);
-                            }
-                            // If no messages found in cache, continue to API
-                        }
-                        Ok(None) => {
-                            // Cache miss or stale, continue to API
-                        }
-                        Err(e) => {
-                            if client.verbose() {
-                                eprintln!("[CACHE] Error reading cache: {}", e);
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    if client.verbose() {
-                        eprintln!("[CACHE] Failed to get connection: {}", e);
-                    }
-                }
-            }
-        }
-    }
-
-    // Fetch from API
+    // Always fetch from API for list operations
     let query = vec![
         ("channel", channel.to_string()),
         ("ts", thread_ts.to_string()),
@@ -159,18 +73,16 @@ pub async fn get_thread(
 
     let messages = response.messages;
 
-    // Write through to cache if use_cache is true (best effort, don't fail on cache errors)
-    if use_cache {
-        if let Some(pool) = client.cache_pool() {
-            if let Ok(mut conn) = crate::cache::get_connection(pool).await {
-                let _ = crate::cache::operations::upsert_messages(
-                    &mut conn,
-                    workspace_id,
-                    channel,
-                    &messages,
-                    client.verbose(),
-                );
-            }
+    // Write through to cache (best effort, don't fail on cache errors)
+    if let Some(pool) = client.cache_pool() {
+        if let Ok(mut conn) = crate::cache::get_connection(pool).await {
+            let _ = crate::cache::operations::upsert_messages(
+                &mut conn,
+                workspace_id,
+                channel,
+                &messages,
+                client.verbose(),
+            );
         }
     }
 
@@ -220,7 +132,7 @@ mod tests {
             .create_async()
             .await;
 
-        let messages = list_messages(&client, "C123", 10, None, None, false)
+        let messages = list_messages(&client, "C123", 10, None, None)
             .await
             .unwrap();
         assert_eq!(messages.len(), 1);
@@ -254,7 +166,6 @@ mod tests {
             10,
             Some("1234567900".to_string()),
             Some("1234567800".to_string()),
-            false,
         )
         .await
         .unwrap();
@@ -277,7 +188,7 @@ mod tests {
             .create_async()
             .await;
 
-        let result = list_messages(&client, "C999", 10, None, None, false).await;
+        let result = list_messages(&client, "C999", 10, None, None).await;
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -321,7 +232,7 @@ mod tests {
             .create_async()
             .await;
 
-        let messages = get_thread(&client, "C123", "1234567890.123456", false)
+        let messages = get_thread(&client, "C123", "1234567890.123456")
             .await
             .unwrap();
         assert_eq!(messages.len(), 3);
@@ -347,7 +258,7 @@ mod tests {
             .create_async()
             .await;
 
-        let result = get_thread(&client, "C123", "9999999999.999999", false).await;
+        let result = get_thread(&client, "C123", "9999999999.999999").await;
         assert!(result.is_err());
         assert!(result
             .unwrap_err()

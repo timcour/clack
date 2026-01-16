@@ -52,13 +52,12 @@ async fn main() -> Result<()> {
             limit,
             latest,
             oldest,
-            use_cache,
         } => {
             // Resolve channel name to ID if needed
             let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
 
             let messages =
-                api::messages::list_messages(&client, &channel_id, limit, latest, oldest, use_cache).await?;
+                api::messages::list_messages(&client, &channel_id, limit, latest, oldest).await?;
 
             match cli.format.as_str() {
                 "json" => println!("{}", serde_json::to_string_pretty(&messages)?),
@@ -85,12 +84,11 @@ async fn main() -> Result<()> {
         Commands::Thread {
             channel,
             message_ts,
-            use_cache,
         } => {
             // Resolve channel name to ID if needed
             let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
 
-            let messages = api::messages::get_thread(&client, &channel_id, &message_ts, use_cache).await?;
+            let messages = api::messages::get_thread(&client, &channel_id, &message_ts).await?;
 
             match cli.format.as_str() {
                 "json" => println!("{}", serde_json::to_string_pretty(&messages)?),

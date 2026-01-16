@@ -12,38 +12,7 @@ pub async fn list_users(
         .workspace_id()
         .ok_or_else(|| anyhow::anyhow!("Workspace ID not initialized"))?;
 
-    // Try cache first (if pool available)
-    if let Some(pool) = client.cache_pool() {
-        match cache::get_connection(pool).await {
-            Ok(mut conn) => {
-                match cache::operations::get_users(&mut conn, workspace_id, client.verbose()) {
-                    Ok(Some(cached_users)) => {
-                        let mut users = cached_users;
-                        if !include_deleted {
-                            users.retain(|u| !u.deleted);
-                        }
-                        return Ok(users);
-                    }
-                    Ok(None) => {
-                        // Cache miss or stale, continue to API
-                    }
-                    Err(e) => {
-                        if client.verbose() {
-                            eprintln!("[CACHE] Error reading cache: {}", e);
-                        }
-                        // Fall through to API
-                    }
-                }
-            }
-            Err(e) => {
-                if client.verbose() {
-                    eprintln!("[CACHE] Failed to get connection: {}", e);
-                }
-            }
-        }
-    }
-
-    // Cache miss or error - fetch from API
+    // Always fetch from API for list operations
     let query = vec![("limit", limit.to_string())];
     let response: UsersListResponse = client.get("users.list", &query).await?;
 
