@@ -15,6 +15,7 @@ pub struct SlackClient {
     client: reqwest::Client,
     base_url: String,
     verbose: bool,
+    workspace_id: Option<String>,
 }
 
 impl SlackClient {
@@ -44,6 +45,7 @@ impl SlackClient {
             client,
             base_url: base_url.to_string(),
             verbose,
+            workspace_id: None,
         })
     }
 
@@ -190,5 +192,29 @@ impl SlackClient {
                 .with_context(|| format!("Failed to parse API response from {}", endpoint))?;
             return Ok(data);
         }
+    }
+
+    /// Initialize workspace context by calling auth.test
+    pub async fn init_workspace(&mut self) -> Result<String> {
+        if let Some(ref id) = self.workspace_id {
+            return Ok(id.clone());
+        }
+
+        // Import moved inside function to avoid circular dependency
+        use crate::api::auth::test_auth;
+
+        let auth_response = test_auth(self).await?;
+        self.workspace_id = Some(auth_response.team_id.clone());
+
+        if self.verbose {
+            eprintln!("Workspace: {} ({})", auth_response.team, auth_response.team_id);
+        }
+
+        Ok(auth_response.team_id)
+    }
+
+    /// Get the workspace ID if initialized
+    pub fn workspace_id(&self) -> Option<&str> {
+        self.workspace_id.as_deref()
     }
 }

@@ -13,7 +13,10 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Create API client with verbose flag
-    let client = api::client::SlackClient::new_verbose(cli.verbose)?;
+    let mut client = api::client::SlackClient::new_verbose(cli.verbose)?;
+
+    // Initialize workspace context (fetches team_id)
+    client.init_workspace().await?;
 
     // Execute command
     match cli.command {
