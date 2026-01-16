@@ -195,6 +195,8 @@ mod tests {
             text: text.to_string(),
             thread_ts: thread_ts.map(|s| s.to_string()),
             reactions: None,
+            channel: None,
+            permalink: None,
         }
     }
 

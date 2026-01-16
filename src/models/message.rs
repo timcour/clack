@@ -7,6 +7,15 @@ pub struct Message {
     pub text: String,
     pub thread_ts: Option<String>,
     pub reactions: Option<Vec<Reaction>>,
+    // Search-specific fields
+    pub channel: Option<MessageChannel>,
+    pub permalink: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct MessageChannel {
+    pub id: String,
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

@@ -357,11 +357,132 @@ For large workspaces with many channels, the initial channel name resolution may
 - `channels:read` - For public channels
 - `groups:read` - For private channels
 
+### Search
+
+The `search` command allows you to search through Slack messages, files, or both. Searches use Slack's search modifiers and support various filters.
+
+#### Search messages
+```bash
+clack search messages <query>
+```
+
+Searches for messages matching the query across all channels the bot has access to.
+
+**Arguments:**
+- `<query>` - Search query text
+
+**Options:**
+- `--from <user>` - Filter by message author (user ID, @username, or display name)
+- `--channel <channel>` - Filter by channel (channel ID, #name, or name)
+- `--after <date>` - Filter messages after date (YYYY-MM-DD or Unix timestamp)
+- `--before <date>` - Filter messages before date (YYYY-MM-DD or Unix timestamp)
+- `--limit <n>` - Maximum number of results (default: 200)
+- `--format <format>` - Output format: `human` (default), `json`, `yaml`
+
+**Examples:**
+```bash
+# Simple text search
+clack search messages "deployment failed"
+
+# Search for messages from a specific user
+clack search messages "approved" --from alice
+
+# Search in a specific channel
+clack search messages "standup notes" --channel engineering
+
+# Search with date range
+clack search messages "budget" --after 2024-01-01 --before 2024-12-31
+
+# Combine multiple filters
+clack search messages "release" --from bob --channel releases --after 2024-06-01
+
+# Export results as JSON
+clack search messages "error" --format json
+```
+
+#### Search files
+```bash
+clack search files <query>
+```
+
+Searches for files matching the query across all channels the bot has access to.
+
+**Arguments:**
+- `<query>` - Search query text (can include wildcards like `*.pdf`)
+
+**Options:**
+- `--from <user>` - Filter by file uploader (user ID, @username, or display name)
+- `--channel <channel>` - Filter by channel where file was shared (channel ID, #name, or name)
+- `--after <date>` - Filter files after date (YYYY-MM-DD or Unix timestamp)
+- `--before <date>` - Filter files before date (YYYY-MM-DD or Unix timestamp)
+- `--limit <n>` - Maximum number of results (default: 200)
+- `--format <format>` - Output format: `human` (default), `json`, `yaml`
+
+**Examples:**
+```bash
+# Search for PDF files
+clack search files "*.pdf"
+
+# Search for files from a specific user
+clack search files "presentation" --from alice
+
+# Search for files in a specific channel
+clack search files "diagram" --channel engineering
+
+# Search with date range
+clack search files "report" --after 2024-01-01
+
+# Combine filters
+clack search files "*.xlsx" --from bob --channel finance --after 2024-06-01
+```
+
+#### Search all (messages and files)
+```bash
+clack search all <query>
+```
+
+Searches both messages and files simultaneously.
+
+**Arguments:**
+- `<query>` - Search query text
+
+**Options:**
+- `--channel <channel>` - Filter by channel (channel ID, #name, or name)
+- `--limit <n>` - Maximum number of results (default: 200)
+- `--format <format>` - Output format: `human` (default), `json`, `yaml`
+
+**Examples:**
+```bash
+# Search everything
+clack search all "quarterly review"
+
+# Search in specific channel
+clack search all "budget 2024" --channel finance
+
+# Export combined results
+clack search all "project alpha" --format json
+```
+
+**Search Query Syntax:**
+
+The search commands use Slack's search modifier syntax. Filters are automatically combined with your query:
+- `--from alice` becomes `from:alice` in the search query
+- `--channel engineering` becomes `in:engineering`
+- `--after 2024-01-01` becomes `after:2024-01-01`
+- `--before 2024-12-31` becomes `before:2024-12-31`
+
+You can also use Slack's native search modifiers directly in your query string:
+```bash
+clack search messages "deploy from:alice in:engineering after:2024-01-01"
+```
+
+**Required Scopes:**
+- `search:read` - Required for all search commands
+
 ## Future Commands (Not Yet Implemented)
 
 These commands are planned for future releases:
 
 ```bash
 clack channel <id>      # Get detailed channel info
-clack search <query>    # Search messages (Phase 7)
 ```

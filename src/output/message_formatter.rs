@@ -183,6 +183,8 @@ mod tests {
             text: text.to_string(),
             thread_ts: None,
             reactions: None,
+            channel: None,
+            permalink: None,
         }
     }
 

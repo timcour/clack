@@ -5,7 +5,7 @@ mod output;
 
 use anyhow::Result;
 use clap::Parser;
-use cli::{Cli, Commands};
+use cli::{Cli, Commands, SearchType};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -120,6 +120,80 @@ async fn main() -> Result<()> {
                 }
             }
         }
+        Commands::Search { search_type } => match search_type {
+            SearchType::Messages {
+                query,
+                from,
+                channel,
+                after,
+                before,
+                limit,
+            } => {
+                // Build search query with filters
+                let search_query = api::search::build_search_query(
+                    &query,
+                    from.as_deref(),
+                    channel.as_deref(),
+                    after.as_deref(),
+                    before.as_deref(),
+                );
+
+                let response = api::search::search_messages(&client, &search_query, Some(limit)).await?;
+
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&response)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&response)?),
+                    _ => output::search_formatter::format_search_messages(&response, cli.no_color)?,
+                }
+            }
+            SearchType::Files {
+                query,
+                from,
+                channel,
+                after,
+                before,
+                limit,
+            } => {
+                // Build search query with filters
+                let search_query = api::search::build_search_query(
+                    &query,
+                    from.as_deref(),
+                    channel.as_deref(),
+                    after.as_deref(),
+                    before.as_deref(),
+                );
+
+                let response = api::search::search_files(&client, &search_query, Some(limit)).await?;
+
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&response)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&response)?),
+                    _ => output::search_formatter::format_search_files(&response, cli.no_color)?,
+                }
+            }
+            SearchType::All {
+                query,
+                channel,
+                limit,
+            } => {
+                // Build search query with filters
+                let search_query = api::search::build_search_query(
+                    &query,
+                    None,
+                    channel.as_deref(),
+                    None,
+                    None,
+                );
+
+                let response = api::search::search_all(&client, &search_query, Some(limit)).await?;
+
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&response)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&response)?),
+                    _ => output::search_formatter::format_search_all(&response, cli.no_color)?,
+                }
+            }
+        },
     }
 
     Ok(())

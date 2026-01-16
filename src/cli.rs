@@ -69,6 +69,78 @@ pub enum Commands {
         #[arg(long)]
         include_archived: bool,
     },
+    /// Search for messages, files, or channels
+    Search {
+        #[command(subcommand)]
+        search_type: SearchType,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum SearchType {
+    /// Search messages
+    Messages {
+        /// Search query
+        query: String,
+
+        /// Filter by user (user ID, @username, or display name)
+        #[arg(long)]
+        from: Option<String>,
+
+        /// Filter by channel (channel ID, #name, or name)
+        #[arg(long, alias = "in")]
+        channel: Option<String>,
+
+        /// Filter messages after date (YYYY-MM-DD or Unix timestamp)
+        #[arg(long)]
+        after: Option<String>,
+
+        /// Filter messages before date (YYYY-MM-DD or Unix timestamp)
+        #[arg(long)]
+        before: Option<String>,
+
+        /// Maximum number of results
+        #[arg(long, default_value = "200")]
+        limit: u32,
+    },
+    /// Search files
+    Files {
+        /// Search query
+        query: String,
+
+        /// Filter by user (user ID, @username, or display name)
+        #[arg(long)]
+        from: Option<String>,
+
+        /// Filter by channel (channel ID, #name, or name)
+        #[arg(long, alias = "in")]
+        channel: Option<String>,
+
+        /// Filter files after date (YYYY-MM-DD or Unix timestamp)
+        #[arg(long)]
+        after: Option<String>,
+
+        /// Filter files before date (YYYY-MM-DD or Unix timestamp)
+        #[arg(long)]
+        before: Option<String>,
+
+        /// Maximum number of results
+        #[arg(long, default_value = "200")]
+        limit: u32,
+    },
+    /// Search all (messages and files)
+    All {
+        /// Search query
+        query: String,
+
+        /// Filter by channel (channel ID, #name, or name)
+        #[arg(long, alias = "in")]
+        channel: Option<String>,
+
+        /// Maximum number of results
+        #[arg(long, default_value = "200")]
+        limit: u32,
+    },
 }
 
 #[cfg(test)]
@@ -223,6 +295,107 @@ mod tests {
                 assert!(include_archived);
             }
             _ => panic!("Expected Channels command"),
+        }
+    }
+
+    #[test]
+    fn test_search_messages_basic() {
+        let cli = Cli::parse_from(["clack", "search", "messages", "hello world"]);
+        match cli.command {
+            Commands::Search { search_type } => match search_type {
+                SearchType::Messages {
+                    query,
+                    from,
+                    channel,
+                    after,
+                    before,
+                    limit,
+                } => {
+                    assert_eq!(query, "hello world");
+                    assert_eq!(from, None);
+                    assert_eq!(channel, None);
+                    assert_eq!(after, None);
+                    assert_eq!(before, None);
+                    assert_eq!(limit, 200);
+                }
+                _ => panic!("Expected Messages search type"),
+            },
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_messages_with_filters() {
+        let cli = Cli::parse_from([
+            "clack",
+            "search",
+            "messages",
+            "deploy",
+            "--from",
+            "alice",
+            "--channel",
+            "engineering",
+            "--after",
+            "2024-01-01",
+            "--before",
+            "2024-12-31",
+            "--limit",
+            "50",
+        ]);
+        match cli.command {
+            Commands::Search { search_type } => match search_type {
+                SearchType::Messages {
+                    query,
+                    from,
+                    channel,
+                    after,
+                    before,
+                    limit,
+                } => {
+                    assert_eq!(query, "deploy");
+                    assert_eq!(from, Some("alice".to_string()));
+                    assert_eq!(channel, Some("engineering".to_string()));
+                    assert_eq!(after, Some("2024-01-01".to_string()));
+                    assert_eq!(before, Some("2024-12-31".to_string()));
+                    assert_eq!(limit, 50);
+                }
+                _ => panic!("Expected Messages search type"),
+            },
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_files_basic() {
+        let cli = Cli::parse_from(["clack", "search", "files", "*.pdf"]);
+        match cli.command {
+            Commands::Search { search_type } => match search_type {
+                SearchType::Files { query, .. } => {
+                    assert_eq!(query, "*.pdf");
+                }
+                _ => panic!("Expected Files search type"),
+            },
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_search_all() {
+        let cli = Cli::parse_from(["clack", "search", "all", "budget 2024"]);
+        match cli.command {
+            Commands::Search { search_type } => match search_type {
+                SearchType::All {
+                    query,
+                    channel,
+                    limit,
+                } => {
+                    assert_eq!(query, "budget 2024");
+                    assert_eq!(channel, None);
+                    assert_eq!(limit, 200);
+                }
+                _ => panic!("Expected All search type"),
+            },
+            _ => panic!("Expected Search command"),
         }
     }
 }
