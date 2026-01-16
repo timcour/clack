@@ -33,6 +33,11 @@ pub fn get_cache_db_path() -> Result<PathBuf> {
 /// Initialize the cache database and run migrations
 pub fn init_cache_db(verbose: bool) -> Result<()> {
     let db_path = get_cache_db_path()?;
+    init_cache_db_at_path(&db_path, verbose)
+}
+
+/// Initialize cache database at a specific path (for testing)
+pub fn init_cache_db_at_path(db_path: &PathBuf, verbose: bool) -> Result<()> {
     let db_url = format!("sqlite://{}", db_path.display());
 
     if verbose {

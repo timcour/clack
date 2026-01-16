@@ -102,11 +102,14 @@ Set up diesel-async, create migration infrastructure, and implement the initial 
 ```toml
 [dependencies]
 # Existing dependencies...
-diesel = { version = "2.1", features = ["sqlite"] }
-diesel-async = { version = "0.4", features = ["sqlite", "deadpool"] }
-deadpool = { version = "0.10" }
+diesel = { version = "2.1", features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
+diesel-async = { version = "0.4", features = ["async-connection-wrapper", "deadpool"] }
 diesel_migrations = "2.1"
 dirs = "5.0"
+
+[dev-dependencies]
+# Existing dev dependencies...
+tempfile = "3.8"  # For creating temporary test databases
 ```
 
 #### 2. Create Migration Infrastructure
@@ -382,6 +385,58 @@ mod cache;  // ← Add this line
 mod cli;
 mod models;
 mod output;
+```
+
+#### 8. Create lib.rs for Tests
+**File**: `src/lib.rs` (new file)
+**Changes**: Expose cache module for integration tests
+
+```rust
+pub mod cache;
+```
+
+#### 9. Add Test Helper Function
+**File**: `src/cache/db.rs`
+**Changes**: Add function for tests to specify custom database path
+
+```rust
+/// Initialize cache database at a specific path (for testing)
+pub fn init_cache_db_at_path(db_path: &PathBuf, verbose: bool) -> Result<()> {
+    let db_url = format!("sqlite://{}", db_path.display());
+
+    // ... same implementation as init_cache_db but uses provided path
+}
+```
+
+#### 10. Create Integration Test
+**File**: `tests/cache_init_test.rs` (new file)
+**Changes**: Test database initialization with temporary directory
+
+```rust
+use clack::cache::db::init_cache_db_at_path;
+use tempfile::tempdir;
+
+#[test]
+fn test_cache_db_initialization() {
+    // Create a temporary directory for this test
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test_cache.db");
+
+    // Initialize the cache at the temp path
+    let result = init_cache_db_at_path(&db_path, true);
+    assert!(result.is_ok(), "Failed to initialize cache: {:?}", result);
+
+    // Verify database file was created
+    assert!(db_path.exists(), "Database file was not created");
+
+    // Verify WAL files were created
+    let wal_path = temp_dir.path().join("test_cache.db-wal");
+    let shm_path = temp_dir.path().join("test_cache.db-shm");
+    assert!(wal_path.exists(), "WAL file was not created");
+    assert!(shm_path.exists(), "SHM file was not created");
+
+    // temp_dir automatically cleaned up when it goes out of scope
+}
 ```
 
 ### Success Criteria
@@ -2701,7 +2756,7 @@ test-cache:
 ### Unit Tests
 - **Location**: Inline `#[cfg(test)]` modules in each source file
 - **Focus**: Individual functions and operations
-- **Database**: In-memory SQLite (`:memory:`)
+- **Database**: In-memory SQLite (`:memory:`) for fast, isolated tests
 - **Coverage**:
   - Cache CRUD operations (insert, get, update, delete)
   - TTL checking logic
@@ -2711,12 +2766,29 @@ test-cache:
 ### Integration Tests
 - **Location**: `tests/` directory
 - **Focus**: End-to-end scenarios
-- **Database**: In-memory SQLite
+- **Database**: Temporary directory within build directory (NOT system cache location)
+  - Use `tempfile` crate to create isolated test databases
+  - Each test gets its own temporary database file
+  - Automatically cleaned up after test completion
+  - Prevents pollution of production cache directory
 - **Coverage**:
   - Pool creation and connection management
   - Concurrent access scenarios
   - Migration application
   - Full API → Cache → API roundtrip
+  - WAL mode verification
+  - File-based database operations
+
+### Test Database Strategy
+- **Production**: Uses platform-specific cache directory (`~/Library/Caches/clack/cache.db` on macOS)
+- **Tests**: Use temporary files in build directory
+  - Integration tests: `tempfile::tempdir()` for isolated file-based tests
+  - Unit tests: `:memory:` for fast in-memory tests
+- **Benefits**:
+  - No pollution of user's cache directory during development
+  - Each test run is completely isolated
+  - Parallel test execution without conflicts
+  - Automatic cleanup on test completion
 
 ### Manual Testing Checklist
 - [ ] First run creates cache directory at correct platform location
