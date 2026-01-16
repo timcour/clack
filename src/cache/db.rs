@@ -3,12 +3,15 @@ use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
-// Placeholder types for Phase 1 - will be properly implemented in Phase 3
-pub type CachePool = ();
-pub type CacheConnection = ();
+// For SQLite, we use synchronous connections with a mutex for thread safety
+// This is simpler and more appropriate for SQLite's file-based nature
+pub type CachePool = Arc<Mutex<String>>; // Stores the DB path
+pub type CacheConnection = SqliteConnection;
 
 /// Get platform-specific cache directory
 pub fn get_cache_dir() -> Result<PathBuf> {
@@ -69,14 +72,31 @@ pub fn init_cache_db_at_path(db_path: &PathBuf, verbose: bool) -> Result<()> {
     Ok(())
 }
 
-/// Initialize the cache database (Phase 1 - pool creation will be added in Phase 3)
-pub fn create_cache_pool(verbose: bool) -> Result<CachePool> {
+/// Create a connection pool for the cache database
+/// For SQLite with async-connection-wrapper, this stores the DB URL
+/// Actual connections are created on demand
+pub async fn create_cache_pool(verbose: bool) -> Result<CachePool> {
     // Initialize database and run migrations
     init_cache_db(verbose)?;
 
+    let db_path = get_cache_db_path()?;
+    let db_url = format!("sqlite://{}", db_path.display());
+
     if verbose {
-        eprintln!("Cache database ready (pool will be added in Phase 3)");
+        eprintln!("Cache database ready at: {}", db_url);
     }
 
-    Ok(())
+    Ok(Arc::new(Mutex::new(db_url)))
+}
+
+/// Get a connection from the pool
+/// For SQLite, this creates a new synchronous connection
+pub async fn get_connection(pool: &CachePool) -> Result<CacheConnection> {
+    let db_url = pool.lock().await.clone();
+
+    // Create sync connection
+    let conn = SqliteConnection::establish(&db_url)
+        .context("Failed to establish SQLite connection")?;
+
+    Ok(conn)
 }
