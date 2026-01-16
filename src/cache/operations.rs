@@ -25,7 +25,7 @@ fn is_fresh(cached_at: chrono::NaiveDateTime, ttl_seconds: i64) -> bool {
 
 pub fn get_user(
     conn: &mut CacheConnection,
-    _workspace_id: &str,
+    ws_id: &str,
     user_id: &str,
     verbose: bool,
 ) -> Result<Option<User>> {
@@ -33,7 +33,7 @@ pub fn get_user(
 
     let cached_user: Option<CachedUser> = users
         .filter(id.eq(user_id))
-        .filter(workspace_id.eq(workspace_id))
+        .filter(workspace_id.eq(ws_id))
         .filter(deleted_at.is_null())
         .first(conn)
         .optional()?;
@@ -63,13 +63,13 @@ pub fn get_user(
 
 pub fn get_users(
     conn: &mut CacheConnection,
-    _workspace_id: &str,
+    ws_id: &str,
     verbose: bool,
 ) -> Result<Option<Vec<User>>> {
     use super::schema::users::dsl::*;
 
     let cached_users: Vec<CachedUser> = users
-        .filter(workspace_id.eq(workspace_id))
+        .filter(workspace_id.eq(ws_id))
         .filter(deleted_at.is_null())
         .load(conn)
         ?;
@@ -152,7 +152,7 @@ pub fn upsert_users(
 
 pub fn get_conversation(
     conn: &mut CacheConnection,
-    _workspace_id: &str,
+    ws_id: &str,
     conversation_id: &str,
     verbose: bool,
 ) -> Result<Option<Channel>> {
@@ -160,7 +160,7 @@ pub fn get_conversation(
 
     let cached_conv: Option<CachedConversation> = conversations
         .filter(id.eq(conversation_id))
-        .filter(workspace_id.eq(workspace_id))
+        .filter(workspace_id.eq(ws_id))
         .filter(deleted_at.is_null())
         .first(conn)
         .optional()?;
@@ -190,13 +190,13 @@ pub fn get_conversation(
 
 pub fn get_conversations(
     conn: &mut CacheConnection,
-    _workspace_id: &str,
+    ws_id: &str,
     verbose: bool,
 ) -> Result<Option<Vec<Channel>>> {
     use super::schema::conversations::dsl::*;
 
     let cached_convs: Vec<CachedConversation> = conversations
-        .filter(workspace_id.eq(workspace_id))
+        .filter(workspace_id.eq(ws_id))
         .filter(deleted_at.is_null())
         .load(conn)
         ?;
@@ -274,7 +274,7 @@ pub fn upsert_conversations(
 
 pub fn get_messages(
     conn: &mut CacheConnection,
-    _workspace_id: &str,
+    ws_id: &str,
     conv_id: &str,
     verbose: bool,
 ) -> Result<Option<Vec<Message>>> {
@@ -282,7 +282,7 @@ pub fn get_messages(
 
     let cached_msgs: Vec<CachedMessage> = messages
         .filter(conversation_id.eq(conv_id))
-        .filter(workspace_id.eq(workspace_id))
+        .filter(workspace_id.eq(ws_id))
         .filter(deleted_at.is_null())
         .load(conn)
         ?;

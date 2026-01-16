@@ -145,6 +145,13 @@ mod tests {
     async fn test_list_users_success() {
         let (mut server, client) = setup().await;
 
+        // Clear cache to ensure clean test state
+        if let Some(pool) = client.cache_pool() {
+            if let Ok(mut conn) = crate::cache::get_connection(pool).await {
+                let _ = crate::cache::operations::clear_workspace_cache(&mut conn, "T123", false);
+            }
+        }
+
         let _mock = server
             .mock("GET", "/users.list?limit=200")
             .with_status(200)
@@ -229,6 +236,13 @@ mod tests {
     async fn test_list_users_with_limit() {
         let (mut server, client) = setup().await;
 
+        // Clear cache to ensure clean test state
+        if let Some(pool) = client.cache_pool() {
+            if let Ok(mut conn) = crate::cache::get_connection(pool).await {
+                let _ = crate::cache::operations::clear_workspace_cache(&mut conn, "T123", false);
+            }
+        }
+
         let _mock = server
             .mock("GET", "/users.list?limit=10")
             .with_status(200)
@@ -248,6 +262,13 @@ mod tests {
     #[tokio::test]
     async fn test_get_user_success() {
         let (mut server, client) = setup().await;
+
+        // Clear cache to ensure clean test state
+        if let Some(pool) = client.cache_pool() {
+            if let Ok(mut conn) = crate::cache::get_connection(pool).await {
+                let _ = crate::cache::operations::clear_workspace_cache(&mut conn, "T123", false);
+            }
+        }
 
         let _mock = server
             .mock("GET", "/users.info?user=U123")
@@ -279,6 +300,13 @@ mod tests {
     #[tokio::test]
     async fn test_get_user_error_response() {
         let (mut server, client) = setup().await;
+
+        // Clear cache to ensure clean test state
+        if let Some(pool) = client.cache_pool() {
+            if let Ok(mut conn) = crate::cache::get_connection(pool).await {
+                let _ = crate::cache::operations::clear_workspace_cache(&mut conn, "T123", false);
+            }
+        }
 
         let _mock = server
             .mock("GET", "/users.info?user=U999")
