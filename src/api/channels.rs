@@ -1,4 +1,5 @@
 use super::client::SlackClient;
+use crate::cache;
 use crate::models::channel::{Channel, ChannelInfoResponse, ChannelsListResponse};
 use anyhow::Result;
 
@@ -106,10 +107,85 @@ async fn fetch_all_channels(client: &SlackClient, include_archived: bool) -> Res
 }
 
 pub async fn list_channels(client: &SlackClient, include_archived: bool) -> Result<Vec<Channel>> {
-    fetch_all_channels(client, include_archived).await
+    let workspace_id = client
+        .workspace_id()
+        .ok_or_else(|| anyhow::anyhow!("Workspace ID not initialized"))?;
+
+    // Try cache first
+    if let Some(pool) = client.cache_pool() {
+        match cache::get_connection(pool).await {
+            Ok(mut conn) => {
+                match cache::operations::get_conversations(&mut conn, workspace_id, client.verbose()) {
+                    Ok(Some(cached_channels)) => {
+                        let mut channels = cached_channels;
+                        if !include_archived {
+                            channels.retain(|c| !c.is_archived.unwrap_or(false));
+                        }
+                        return Ok(channels);
+                    }
+                    Ok(None) => {
+                        // Cache miss, continue to API
+                    }
+                    Err(e) => {
+                        if client.verbose() {
+                            eprintln!("[CACHE] Error reading cache: {}", e);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                if client.verbose() {
+                    eprintln!("[CACHE] Failed to get connection: {}", e);
+                }
+            }
+        }
+    }
+
+    // Fetch from API
+    let channels = fetch_all_channels(client, include_archived).await?;
+
+    // Write through to cache
+    if let Some(pool) = client.cache_pool() {
+        if let Ok(mut conn) = cache::get_connection(pool).await {
+            let _ = cache::operations::upsert_conversations(&mut conn, workspace_id, &channels, client.verbose());
+        }
+    }
+
+    Ok(channels)
 }
 
 pub async fn get_channel(client: &SlackClient, channel_id: &str) -> Result<Channel> {
+    let workspace_id = client
+        .workspace_id()
+        .ok_or_else(|| anyhow::anyhow!("Workspace ID not initialized"))?;
+
+    // Try cache first
+    if let Some(pool) = client.cache_pool() {
+        match cache::get_connection(pool).await {
+            Ok(mut conn) => {
+                match cache::operations::get_conversation(&mut conn, workspace_id, channel_id, client.verbose()) {
+                    Ok(Some(cached_channel)) => {
+                        return Ok(cached_channel);
+                    }
+                    Ok(None) => {
+                        // Cache miss, continue to API
+                    }
+                    Err(e) => {
+                        if client.verbose() {
+                            eprintln!("[CACHE] Error reading cache: {}", e);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                if client.verbose() {
+                    eprintln!("[CACHE] Failed to get connection: {}", e);
+                }
+            }
+        }
+    }
+
+    // Fetch from API
     let query = vec![("channel", channel_id.to_string())];
     let response: ChannelInfoResponse = client.get("conversations.info", &query).await?;
 
@@ -117,7 +193,16 @@ pub async fn get_channel(client: &SlackClient, channel_id: &str) -> Result<Chann
         anyhow::bail!("Slack API error: {}", response.error.unwrap_or_default());
     }
 
-    Ok(response.channel)
+    let channel = response.channel;
+
+    // Write through to cache
+    if let Some(pool) = client.cache_pool() {
+        if let Ok(mut conn) = cache::get_connection(pool).await {
+            let _ = cache::operations::upsert_conversation(&mut conn, workspace_id, &channel, client.verbose());
+        }
+    }
+
+    Ok(channel)
 }
 
 /// Search for channels by name substring (case-insensitive)
@@ -143,9 +228,20 @@ mod tests {
     use super::*;
 
     async fn setup() -> (mockito::ServerGuard, SlackClient) {
-        let server = mockito::Server::new_async().await;
+        let mut server = mockito::Server::new_async().await;
         std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
-        let client = SlackClient::with_base_url(&server.url(), false).unwrap();
+        let mut client = SlackClient::with_base_url(&server.url(), false).await.unwrap();
+
+        // Mock auth.test for workspace initialization
+        let _auth_mock = server
+            .mock("GET", "/auth.test")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"ok": true, "url": "https://test.slack.com/", "team_id": "T123", "team": "Test Team", "user": "testuser", "user_id": "U123"}"#)
+            .create();
+
+        client.init_workspace().await.unwrap();
+
         (server, client)
     }
 
@@ -334,6 +430,13 @@ mod tests {
     #[tokio::test]
     async fn test_pagination() {
         let (mut server, client) = setup().await;
+
+        // Clear cache to ensure clean test state
+        if let Some(pool) = client.cache_pool() {
+            if let Ok(mut conn) = crate::cache::get_connection(pool).await {
+                let _ = crate::cache::operations::clear_workspace_cache(&mut conn, "T123", false);
+            }
+        }
 
         // Mock first page with next_cursor
         let _mock1 = server

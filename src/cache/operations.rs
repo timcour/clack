@@ -25,7 +25,7 @@ fn is_fresh(cached_at: chrono::NaiveDateTime, ttl_seconds: i64) -> bool {
 
 pub fn get_user(
     conn: &mut CacheConnection,
-    workspace_id: &str,
+    _workspace_id: &str,
     user_id: &str,
     verbose: bool,
 ) -> Result<Option<User>> {
@@ -63,7 +63,7 @@ pub fn get_user(
 
 pub fn get_users(
     conn: &mut CacheConnection,
-    workspace_id: &str,
+    _workspace_id: &str,
     verbose: bool,
 ) -> Result<Option<Vec<User>>> {
     use super::schema::users::dsl::*;
@@ -152,7 +152,7 @@ pub fn upsert_users(
 
 pub fn get_conversation(
     conn: &mut CacheConnection,
-    workspace_id: &str,
+    _workspace_id: &str,
     conversation_id: &str,
     verbose: bool,
 ) -> Result<Option<Channel>> {
@@ -190,7 +190,7 @@ pub fn get_conversation(
 
 pub fn get_conversations(
     conn: &mut CacheConnection,
-    workspace_id: &str,
+    _workspace_id: &str,
     verbose: bool,
 ) -> Result<Option<Vec<Channel>>> {
     use super::schema::conversations::dsl::*;
@@ -274,7 +274,7 @@ pub fn upsert_conversations(
 
 pub fn get_messages(
     conn: &mut CacheConnection,
-    workspace_id: &str,
+    _workspace_id: &str,
     conv_id: &str,
     verbose: bool,
 ) -> Result<Option<Vec<Message>>> {

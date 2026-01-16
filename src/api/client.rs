@@ -3,6 +3,8 @@ use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use serde::Deserialize;
 use std::env;
 
+use crate::cache::CachePool;
+
 #[derive(Debug, Deserialize)]
 struct SlackErrorResponse {
     ok: bool,
@@ -16,14 +18,15 @@ pub struct SlackClient {
     base_url: String,
     verbose: bool,
     workspace_id: Option<String>,
+    cache_pool: Option<CachePool>,
 }
 
 impl SlackClient {
-    pub fn new_verbose(verbose: bool) -> Result<Self> {
-        Self::with_base_url("https://slack.com/api", verbose)
+    pub async fn new_verbose(verbose: bool) -> Result<Self> {
+        Self::with_base_url("https://slack.com/api", verbose).await
     }
 
-    pub fn with_base_url(base_url: &str, verbose: bool) -> Result<Self> {
+    pub async fn with_base_url(base_url: &str, verbose: bool) -> Result<Self> {
         let token = env::var("SLACK_TOKEN").context(
             "SLACK_TOKEN environment variable not set\n\n\
              Please set your Slack API token:\n  \
@@ -41,11 +44,24 @@ impl SlackClient {
             .default_headers(headers)
             .build()?;
 
+        // Initialize cache pool (with error handling - silent fallback)
+        let cache_pool = match crate::cache::create_cache_pool(verbose).await {
+            Ok(pool) => Some(pool),
+            Err(e) => {
+                if verbose {
+                    eprintln!("Warning: Failed to initialize cache: {}", e);
+                    eprintln!("Continuing without cache...");
+                }
+                None
+            }
+        };
+
         Ok(Self {
             client,
             base_url: base_url.to_string(),
             verbose,
             workspace_id: None,
+            cache_pool,
         })
     }
 
@@ -216,5 +232,15 @@ impl SlackClient {
     /// Get the workspace ID if initialized
     pub fn workspace_id(&self) -> Option<&str> {
         self.workspace_id.as_deref()
+    }
+
+    /// Get the cache pool if initialized
+    pub fn cache_pool(&self) -> Option<&CachePool> {
+        self.cache_pool.as_ref()
+    }
+
+    /// Check if verbose mode is enabled
+    pub fn verbose(&self) -> bool {
+        self.verbose
     }
 }

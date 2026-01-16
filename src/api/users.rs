@@ -1,4 +1,5 @@
 use super::client::SlackClient;
+use crate::cache;
 use crate::models::user::{User, UserInfoResponse, UsersListResponse};
 use anyhow::Result;
 
@@ -7,23 +8,98 @@ pub async fn list_users(
     limit: u32,
     include_deleted: bool,
 ) -> Result<Vec<User>> {
-    let query = vec![("limit", limit.to_string())];
+    let workspace_id = client
+        .workspace_id()
+        .ok_or_else(|| anyhow::anyhow!("Workspace ID not initialized"))?;
 
+    // Try cache first (if pool available)
+    if let Some(pool) = client.cache_pool() {
+        match cache::get_connection(pool).await {
+            Ok(mut conn) => {
+                match cache::operations::get_users(&mut conn, workspace_id, client.verbose()) {
+                    Ok(Some(cached_users)) => {
+                        let mut users = cached_users;
+                        if !include_deleted {
+                            users.retain(|u| !u.deleted);
+                        }
+                        return Ok(users);
+                    }
+                    Ok(None) => {
+                        // Cache miss or stale, continue to API
+                    }
+                    Err(e) => {
+                        if client.verbose() {
+                            eprintln!("[CACHE] Error reading cache: {}", e);
+                        }
+                        // Fall through to API
+                    }
+                }
+            }
+            Err(e) => {
+                if client.verbose() {
+                    eprintln!("[CACHE] Failed to get connection: {}", e);
+                }
+            }
+        }
+    }
+
+    // Cache miss or error - fetch from API
+    let query = vec![("limit", limit.to_string())];
     let response: UsersListResponse = client.get("users.list", &query).await?;
 
     if !response.ok {
         anyhow::bail!("Slack API error: {}", response.error.unwrap_or_default());
     }
 
-    let mut users = response.members;
-    if !include_deleted {
-        users.retain(|u| !u.deleted);
+    let users = response.members;
+
+    // Write through to cache (best effort, don't fail on cache errors)
+    if let Some(pool) = client.cache_pool() {
+        if let Ok(mut conn) = cache::get_connection(pool).await {
+            let _ = cache::operations::upsert_users(&mut conn, workspace_id, &users, client.verbose());
+        }
     }
 
-    Ok(users)
+    let mut result = users;
+    if !include_deleted {
+        result.retain(|u| !u.deleted);
+    }
+
+    Ok(result)
 }
 
 pub async fn get_user(client: &SlackClient, user_id: &str) -> Result<User> {
+    let workspace_id = client
+        .workspace_id()
+        .ok_or_else(|| anyhow::anyhow!("Workspace ID not initialized"))?;
+
+    // Try cache first
+    if let Some(pool) = client.cache_pool() {
+        match cache::get_connection(pool).await {
+            Ok(mut conn) => {
+                match cache::operations::get_user(&mut conn, workspace_id, user_id, client.verbose()) {
+                    Ok(Some(cached_user)) => {
+                        return Ok(cached_user);
+                    }
+                    Ok(None) => {
+                        // Cache miss, continue to API
+                    }
+                    Err(e) => {
+                        if client.verbose() {
+                            eprintln!("[CACHE] Error reading cache: {}", e);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                if client.verbose() {
+                    eprintln!("[CACHE] Failed to get connection: {}", e);
+                }
+            }
+        }
+    }
+
+    // Fetch from API
     let query = vec![("user", user_id.to_string())];
     let response: UserInfoResponse = client.get("users.info", &query).await?;
 
@@ -31,7 +107,16 @@ pub async fn get_user(client: &SlackClient, user_id: &str) -> Result<User> {
         anyhow::bail!("Slack API error: {}", response.error.unwrap_or_default());
     }
 
-    Ok(response.user)
+    let user = response.user;
+
+    // Write through to cache
+    if let Some(pool) = client.cache_pool() {
+        if let Ok(mut conn) = cache::get_connection(pool).await {
+            let _ = cache::operations::upsert_user(&mut conn, workspace_id, &user, client.verbose());
+        }
+    }
+
+    Ok(user)
 }
 
 #[cfg(test)]
@@ -39,9 +124,20 @@ mod tests {
     use super::*;
 
     async fn setup() -> (mockito::ServerGuard, SlackClient) {
-        let server = mockito::Server::new_async().await;
+        let mut server = mockito::Server::new_async().await;
         std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
-        let client = SlackClient::with_base_url(&server.url(), false).unwrap();
+        let mut client = SlackClient::with_base_url(&server.url(), false).await.unwrap();
+
+        // Mock auth.test for workspace initialization
+        let _auth_mock = server
+            .mock("GET", "/auth.test")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"ok": true, "url": "https://test.slack.com/", "team_id": "T123", "team": "Test Team", "user": "testuser", "user_id": "U123"}"#)
+            .create();
+
+        client.init_workspace().await.unwrap();
+
         (server, client)
     }
 
@@ -81,6 +177,13 @@ mod tests {
     #[tokio::test]
     async fn test_list_users_filters_deleted() {
         let (mut server, client) = setup().await;
+
+        // Clear cache to ensure clean test state
+        if let Some(pool) = client.cache_pool() {
+            if let Ok(mut conn) = crate::cache::get_connection(pool).await {
+                let _ = crate::cache::operations::clear_workspace_cache(&mut conn, "T123", false);
+            }
+        }
 
         let _mock = server
             .mock("GET", "/users.list?limit=200")

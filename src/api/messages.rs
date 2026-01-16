@@ -56,7 +56,7 @@ mod tests {
     async fn setup() -> (mockito::ServerGuard, SlackClient) {
         let server = mockito::Server::new_async().await;
         std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
-        let client = SlackClient::with_base_url(&server.url(), false).unwrap();
+        let client = SlackClient::with_base_url(&server.url(), false).await.unwrap();
         (server, client)
     }
 
