@@ -6,7 +6,7 @@ mod output;
 
 use anyhow::Result;
 use clap::Parser;
-use cli::{Cli, Commands, SearchType};
+use cli::{AuthType, Cli, Commands, SearchType};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -207,6 +207,20 @@ async fn main() -> Result<()> {
                     "json" => println!("{}", serde_json::to_string_pretty(&channels)?),
                     "yaml" => println!("{}", serde_yaml::to_string(&channels)?),
                     _ => output::search_formatter::format_channel_search_results(&query, &channels, cli.no_color)?,
+                }
+            }
+        },
+        Commands::Auth { auth_type } => match auth_type {
+            AuthType::Test => {
+                let auth_response = api::auth::test_auth(&client).await?;
+
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&auth_response)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&auth_response)?),
+                    _ => {
+                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                        output::auth_formatter::format_auth_test(&auth_response, &mut writer)?;
+                    }
                 }
             }
         },

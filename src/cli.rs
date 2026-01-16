@@ -74,6 +74,11 @@ pub enum Commands {
         #[command(subcommand)]
         search_type: SearchType,
     },
+    /// Authentication commands
+    Auth {
+        #[command(subcommand)]
+        auth_type: AuthType,
+    },
 }
 
 #[derive(Subcommand)]
@@ -150,6 +155,12 @@ pub enum SearchType {
         #[arg(long)]
         include_archived: bool,
     },
+}
+
+#[derive(Subcommand)]
+pub enum AuthType {
+    /// Test authentication and display workspace metadata
+    Test,
 }
 
 #[cfg(test)]
@@ -441,6 +452,19 @@ mod tests {
                 _ => panic!("Expected Channels search type"),
             },
             _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_auth_test_command() {
+        let cli = Cli::parse_from(["clack", "auth", "test"]);
+        match cli.command {
+            Commands::Auth { auth_type } => match auth_type {
+                AuthType::Test => {
+                    // Success - command parsed correctly
+                }
+            },
+            _ => panic!("Expected Auth command"),
         }
     }
 }

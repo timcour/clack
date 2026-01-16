@@ -1,3 +1,4 @@
+pub mod auth_formatter;
 pub mod channel_formatter;
 pub mod color;
 pub mod message_formatter;
