@@ -70,14 +70,19 @@ async fn list_channels_and_find(client: &SlackClient, name: &str) -> Result<Stri
     )
 }
 
-async fn fetch_all_channels(client: &SlackClient, include_archived: bool) -> Result<Vec<Channel>> {
+async fn fetch_all_channels(
+    client: &SlackClient,
+    workspace_id: &str,
+    include_archived: bool,
+    limit: u32,
+) -> Result<Vec<Channel>> {
     let exclude_archived = if include_archived { "false" } else { "true" };
     let mut all_channels = Vec::new();
     let mut cursor: Option<String> = None;
 
     loop {
         let mut query = vec![
-            ("limit", "200".to_string()), // Slack's recommended page size
+            ("limit", limit.to_string()),
             ("types", "public_channel,private_channel".to_string()),
             ("exclude_archived", exclude_archived.to_string()),
         ];
@@ -92,7 +97,21 @@ async fn fetch_all_channels(client: &SlackClient, include_archived: bool) -> Res
             anyhow::bail!("Slack API error: {}", response.error.unwrap_or_default());
         }
 
-        all_channels.extend(response.channels);
+        let channels = response.channels;
+
+        // Cache this batch immediately before fetching next batch
+        if let Some(pool) = client.cache_pool() {
+            if let Ok(mut conn) = cache::get_connection(pool).await {
+                let _ = cache::operations::upsert_conversations(
+                    &mut conn,
+                    workspace_id,
+                    &channels,
+                    client.verbose(),
+                );
+            }
+        }
+
+        all_channels.extend(channels);
 
         // Check if there are more pages
         match response.response_metadata {
@@ -106,20 +125,14 @@ async fn fetch_all_channels(client: &SlackClient, include_archived: bool) -> Res
     Ok(all_channels)
 }
 
-pub async fn list_channels(client: &SlackClient, include_archived: bool) -> Result<Vec<Channel>> {
+pub async fn list_channels(client: &SlackClient, include_archived: bool, limit: u32) -> Result<Vec<Channel>> {
     let workspace_id = client
         .workspace_id()
         .ok_or_else(|| anyhow::anyhow!("Workspace ID not initialized"))?;
 
     // Always fetch from API for list operations
-    let channels = fetch_all_channels(client, include_archived).await?;
-
-    // Write through to cache (best effort, don't fail on cache errors)
-    if let Some(pool) = client.cache_pool() {
-        if let Ok(mut conn) = cache::get_connection(pool).await {
-            let _ = cache::operations::upsert_conversations(&mut conn, workspace_id, &channels, client.verbose());
-        }
-    }
+    // Caching happens incrementally during pagination in fetch_all_channels
+    let channels = fetch_all_channels(client, workspace_id, include_archived, limit).await?;
 
     Ok(channels)
 }
@@ -181,7 +194,12 @@ pub async fn search_channels(
     query: &str,
     include_archived: bool,
 ) -> Result<Vec<Channel>> {
-    let all_channels = fetch_all_channels(client, include_archived).await?;
+    let workspace_id = client
+        .workspace_id()
+        .ok_or_else(|| anyhow::anyhow!("Workspace ID not initialized"))?;
+
+    // Use default limit of 200 for search operations
+    let all_channels = fetch_all_channels(client, workspace_id, include_archived, 200).await?;
     let query_lower = query.to_lowercase();
 
     // Filter channels that contain the query string (case-insensitive)
@@ -458,7 +476,7 @@ mod tests {
             .create_async()
             .await;
 
-        let channels = list_channels(&client, false).await.unwrap();
+        let channels = list_channels(&client, false, 200).await.unwrap();
         assert_eq!(channels.len(), 3);
         assert_eq!(channels[0].id, "C1");
         assert_eq!(channels[1].id, "C2");

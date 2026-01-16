@@ -112,8 +112,8 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        Commands::Channels { include_archived } => {
-            let channels = api::channels::list_channels(&client, include_archived).await?;
+        Commands::Channels { include_archived, limit } => {
+            let channels = api::channels::list_channels(&client, include_archived, limit).await?;
 
             match cli.format.as_str() {
                 "json" => println!("{}", serde_json::to_string_pretty(&channels)?),

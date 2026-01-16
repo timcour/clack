@@ -243,7 +243,7 @@ pub fn upsert_conversation(
         ?;
 
     if verbose {
-        eprintln!("[CACHE] Conversation {} - UPSERTED", channel.id);
+        eprintln!("[CACHE] Conversation #{} ({}) - UPSERTED", channel.name, channel.id);
     }
 
     Ok(())
@@ -261,10 +261,14 @@ pub fn upsert_conversations(
             .values(&cached)
             .execute(conn)
             ?;
+
+        if verbose {
+            eprintln!("[CACHE] Conversation #{} ({}) - UPSERTED", channel.name, channel.id);
+        }
     }
 
     if verbose {
-        eprintln!("[CACHE] Conversations - UPSERTED {} conversations", channel_list.len());
+        eprintln!("[CACHE] Conversations - UPSERTED {} conversations total", channel_list.len());
     }
 
     Ok(())

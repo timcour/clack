@@ -68,6 +68,10 @@ pub enum Commands {
         /// Include archived channels
         #[arg(long)]
         include_archived: bool,
+
+        /// Maximum number of channels to retrieve per page (default: 200, max: 1000)
+        #[arg(long, default_value = "200")]
+        limit: u32,
     },
     /// Search for messages, files, or channels
     Search {
@@ -300,8 +304,9 @@ mod tests {
     fn test_channels_command() {
         let cli = Cli::parse_from(["clack", "channels"]);
         match cli.command {
-            Commands::Channels { include_archived } => {
+            Commands::Channels { include_archived, limit } => {
                 assert!(!include_archived);
+                assert_eq!(limit, 200); // default value
             }
             _ => panic!("Expected Channels command"),
         }
@@ -311,8 +316,9 @@ mod tests {
     fn test_channels_command_with_archived() {
         let cli = Cli::parse_from(["clack", "channels", "--include-archived"]);
         match cli.command {
-            Commands::Channels { include_archived } => {
+            Commands::Channels { include_archived, limit } => {
                 assert!(include_archived);
+                assert_eq!(limit, 200); // default value
             }
             _ => panic!("Expected Channels command"),
         }
