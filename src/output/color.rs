@@ -3,7 +3,6 @@ use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 pub struct ColorWriter {
     stdout: StandardStream,
-    colors_enabled: bool,
 }
 
 impl ColorWriter {
@@ -17,7 +16,6 @@ impl ColorWriter {
 
         Self {
             stdout: StandardStream::stdout(choice),
-            colors_enabled,
         }
     }
 
@@ -54,13 +52,6 @@ impl ColorWriter {
         Ok(())
     }
 
-    /// Print success message
-    pub fn print_success(&mut self, text: &str) -> io::Result<()> {
-        self.print_colored("✓ ", Color::Green)?;
-        writeln!(self.stdout, "{}", text)?;
-        Ok(())
-    }
-
     /// Print error message
     pub fn print_error(&mut self, text: &str) -> io::Result<()> {
         self.print_colored("✗ ", Color::Red)?;
@@ -73,11 +64,6 @@ impl ColorWriter {
         self.print_colored(&"─".repeat(80), Color::White)?;
         writeln!(self.stdout)?;
         Ok(())
-    }
-
-    /// Print regular text (no color)
-    pub fn print(&mut self, text: &str) -> io::Result<()> {
-        writeln!(self.stdout, "{}", text)
     }
 
     /// Write text without newline

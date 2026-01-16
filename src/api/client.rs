@@ -18,10 +18,6 @@ pub struct SlackClient {
 }
 
 impl SlackClient {
-    pub fn new() -> Result<Self> {
-        Self::with_base_url("https://slack.com/api", false)
-    }
-
     pub fn new_verbose(verbose: bool) -> Result<Self> {
         Self::with_base_url("https://slack.com/api", verbose)
     }

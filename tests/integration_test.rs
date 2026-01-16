@@ -1,10 +1,10 @@
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
 
 #[test]
 fn test_missing_slack_token() {
     // Ensure SLACK_TOKEN is not set for this test
-    let mut cmd = Command::cargo_bin("clack").unwrap();
+    let mut cmd = cargo_bin_cmd!("clack");
     cmd.env_remove("SLACK_TOKEN")
         .arg("users")
         .assert()
@@ -14,7 +14,7 @@ fn test_missing_slack_token() {
 
 #[test]
 fn test_help_output() {
-    let mut cmd = Command::cargo_bin("clack").unwrap();
+    let mut cmd = cargo_bin_cmd!("clack");
     cmd.arg("--help")
         .assert()
         .success()
@@ -25,7 +25,7 @@ fn test_help_output() {
 
 #[test]
 fn test_version_output() {
-    let mut cmd = Command::cargo_bin("clack").unwrap();
+    let mut cmd = cargo_bin_cmd!("clack");
     cmd.arg("--version")
         .assert()
         .success()
@@ -35,7 +35,7 @@ fn test_version_output() {
 
 #[test]
 fn test_users_command_help() {
-    let mut cmd = Command::cargo_bin("clack").unwrap();
+    let mut cmd = cargo_bin_cmd!("clack");
     cmd.arg("users")
         .arg("--help")
         .assert()
@@ -47,7 +47,7 @@ fn test_users_command_help() {
 
 #[test]
 fn test_user_command_help() {
-    let mut cmd = Command::cargo_bin("clack").unwrap();
+    let mut cmd = cargo_bin_cmd!("clack");
     cmd.arg("user")
         .arg("--help")
         .assert()
@@ -58,7 +58,7 @@ fn test_user_command_help() {
 
 #[test]
 fn test_messages_command_help() {
-    let mut cmd = Command::cargo_bin("clack").unwrap();
+    let mut cmd = cargo_bin_cmd!("clack");
     cmd.arg("messages")
         .arg("--help")
         .assert()
@@ -71,7 +71,7 @@ fn test_messages_command_help() {
 
 #[test]
 fn test_invalid_command() {
-    let mut cmd = Command::cargo_bin("clack").unwrap();
+    let mut cmd = cargo_bin_cmd!("clack");
     cmd.arg("invalid-command")
         .assert()
         .failure()
@@ -80,7 +80,7 @@ fn test_invalid_command() {
 
 #[test]
 fn test_user_command_missing_argument() {
-    let mut cmd = Command::cargo_bin("clack").unwrap();
+    let mut cmd = cargo_bin_cmd!("clack");
     cmd.arg("user")
         .assert()
         .failure()
@@ -89,7 +89,7 @@ fn test_user_command_missing_argument() {
 
 #[test]
 fn test_messages_command_missing_argument() {
-    let mut cmd = Command::cargo_bin("clack").unwrap();
+    let mut cmd = cargo_bin_cmd!("clack");
     cmd.arg("messages")
         .assert()
         .failure()

@@ -1,6 +1,5 @@
 pub mod channel_formatter;
 pub mod color;
-pub mod formatter;
 pub mod message_formatter;
 pub mod search_formatter;
 pub mod thread_formatter;
