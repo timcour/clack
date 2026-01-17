@@ -7,6 +7,7 @@ fn test_missing_slack_token() {
     let mut cmd = cargo_bin_cmd!("clack");
     cmd.env_remove("SLACK_TOKEN")
         .arg("users")
+        .arg("list")
         .assert()
         .failure()
         .stderr(predicate::str::contains("SLACK_TOKEN environment variable not set"));
@@ -20,7 +21,7 @@ fn test_help_output() {
         .success()
         .stdout(predicate::str::contains("A Slack API CLI tool"))
         .stdout(predicate::str::contains("users"))
-        .stdout(predicate::str::contains("messages"));
+        .stdout(predicate::str::contains("conversations"));
 }
 
 #[test]
@@ -34,9 +35,10 @@ fn test_version_output() {
 }
 
 #[test]
-fn test_users_command_help() {
+fn test_users_list_command_help() {
     let mut cmd = cargo_bin_cmd!("clack");
     cmd.arg("users")
+        .arg("list")
         .arg("--help")
         .assert()
         .success()
@@ -46,24 +48,26 @@ fn test_users_command_help() {
 }
 
 #[test]
-fn test_user_command_help() {
+fn test_users_info_command_help() {
     let mut cmd = cargo_bin_cmd!("clack");
-    cmd.arg("user")
+    cmd.arg("users")
+        .arg("info")
         .arg("--help")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Get a specific user by ID"))
+        .stdout(predicate::str::contains("Get information about a specific user"))
         .stdout(predicate::str::contains("<USER_ID>"));
 }
 
 #[test]
-fn test_messages_command_help() {
+fn test_conversations_history_command_help() {
     let mut cmd = cargo_bin_cmd!("clack");
-    cmd.arg("messages")
+    cmd.arg("conversations")
+        .arg("history")
         .arg("--help")
         .assert()
         .success()
-        .stdout(predicate::str::contains("List messages from a channel"))
+        .stdout(predicate::str::contains("Get message history from a channel"))
         .stdout(predicate::str::contains("--limit"))
         .stdout(predicate::str::contains("--latest"))
         .stdout(predicate::str::contains("--oldest"));
@@ -79,18 +83,20 @@ fn test_invalid_command() {
 }
 
 #[test]
-fn test_user_command_missing_argument() {
+fn test_users_info_command_missing_argument() {
     let mut cmd = cargo_bin_cmd!("clack");
-    cmd.arg("user")
+    cmd.arg("users")
+        .arg("info")
         .assert()
         .failure()
         .stderr(predicate::str::contains("required"));
 }
 
 #[test]
-fn test_messages_command_missing_argument() {
+fn test_conversations_history_command_missing_argument() {
     let mut cmd = cargo_bin_cmd!("clack");
-    cmd.arg("messages")
+    cmd.arg("conversations")
+        .arg("history")
         .assert()
         .failure()
         .stderr(predicate::str::contains("required"));

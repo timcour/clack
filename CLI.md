@@ -18,10 +18,10 @@ clack <command> [<options>] [<args...>]
 - Machine-readable formats available via `--format` flag
 - Output respects NO_COLOR environment variable
 
-### 4. Intuitive Resource Access
-- Plural commands list resources: `clack users`
-- Singular commands get specific resources: `clack user <id>`
-- Natural language-like flow: `clack messages <channel>`
+### 4. API-Aligned Structure
+- Commands mirror Slack API naming: `users.list` → `clack users list`
+- Hierarchical subcommands group related operations
+- Consistent pattern across all resource types
 
 ## Command Reference
 
@@ -29,7 +29,7 @@ clack <command> [<options>] [<args...>]
 
 #### List all users
 ```bash
-clack users
+clack users list
 ```
 
 Lists all users in the workspace with colorized, human-readable output showing:
@@ -47,18 +47,18 @@ Lists all users in the workspace with colorized, human-readable output showing:
 **Examples:**
 ```bash
 # List all users (human-readable, colorized)
-clack users
+clack users list
 
 # Export users as JSON
-clack users --format json
+clack users list --format json
 
 # Get first 10 users in YAML format
-clack users --limit 10 --format yaml
+clack users list --limit 10 --format yaml
 ```
 
 #### Get a specific user
 ```bash
-clack user <user_id>
+clack users info <user_id>
 ```
 
 Displays detailed information about a single user:
@@ -79,17 +79,17 @@ Displays detailed information about a single user:
 **Examples:**
 ```bash
 # Get user info (human-readable)
-clack user U1234ABCD
+clack users info U1234ABCD
 
 # Get user info as JSON
-clack user U1234ABCD --format json
+clack users info U1234ABCD --format json
 ```
 
-### Messages
+### Conversations
 
 #### List messages in a channel
 ```bash
-clack messages <channel>
+clack conversations history <channel>
 ```
 
 Lists messages from a channel with human-readable output showing:
@@ -108,24 +108,23 @@ Lists messages from a channel with human-readable output showing:
 - `--limit <n>` - Number of messages to retrieve (default: 200)
 - `--latest <timestamp>` - End of time range (default: now)
 - `--oldest <timestamp>` - Start of time range
-- `--include-threads` - Include all thread replies inline
 
 **Examples:**
 ```bash
 # Get last 100 messages from a channel by ID
-clack messages C1234ABCD
+clack conversations history C1234ABCD
 
 # Get messages using channel name
-clack messages general
+clack conversations history general
 
 # Get messages using # prefix
-clack messages #general
+clack conversations history #general
 
 # Get last 50 messages as JSON
-clack messages general --limit 50 --format json
+clack conversations history general --limit 50 --format json
 
 # Get messages from a specific time range
-clack messages C1234ABCD --oldest 1609459200 --latest 1609545600
+clack conversations history C1234ABCD --oldest 1609459200 --latest 1609545600
 ```
 
 **Performance Note:**
@@ -135,16 +134,14 @@ When using channel names (like `general` or `#firmware-team`) instead of channel
 
 For better performance, especially in large workspaces:
 1. Use channel IDs directly when known
-2. Use `clack channels --format json` to get all channel IDs once and cache them
+2. Use `clack conversations list --format json` to get all channel IDs once and cache them
 3. The tool stops searching as soon as it finds the channel (optimized)
 
 The `--limit` parameter only affects the number of messages retrieved, not the channel lookup.
 
-### Threads
-
 #### Get a conversation thread
 ```bash
-clack thread <channel> <message_ts>
+clack conversations replies <channel> <message_ts>
 ```
 
 Retrieves a conversation thread including the root message and all replies. Threads in Slack are conversations that branch off from a message.
@@ -159,33 +156,33 @@ Retrieves a conversation thread including the root message and all replies. Thre
 **Examples:**
 ```bash
 # Get a thread using channel ID
-clack thread C1234ABCD 1234567890.123456
+clack conversations replies C1234ABCD 1234567890.123456
 
 # Get a thread using channel name
-clack thread general 1234567890.123456
+clack conversations replies general 1234567890.123456
 
 # Get a thread using # prefix
-clack thread #general 1234567890.123456
+clack conversations replies #general 1234567890.123456
 
 # Export thread as JSON
-clack thread C1234ABCD 1234567890.123456 --format json
+clack conversations replies C1234ABCD 1234567890.123456 --format json
 
 # Get thread with colorization disabled
-clack thread general 1234567890.123456 --no-color
+clack conversations replies general 1234567890.123456 --no-color
 ```
 
 **Finding Message Timestamps:**
-When using the `messages` command, each message displays its timestamp and a URL. You can use this timestamp with the `thread` command:
+When using the `conversations history` command, each message displays its timestamp and a URL. You can use this timestamp with the `conversations replies` command:
 ```bash
 # First, get messages from a channel
-clack messages general
+clack conversations history general
 
 # Then use a message timestamp to get its thread
-clack thread general 1234567890.123456
+clack conversations replies general 1234567890.123456
 ```
 
 **Performance Note:**
-Like the `messages` command, using channel names requires resolving the name to an ID first. For better performance in large workspaces, use channel IDs directly (e.g., `clack thread C1234ABCD 1234567890.123456`).
+Like the `conversations history` command, using channel names requires resolving the name to an ID first. For better performance in large workspaces, use channel IDs directly (e.g., `clack conversations replies C1234ABCD 1234567890.123456`).
 
 **Required Scopes:**
 - `channels:history` - For threads in public channels
@@ -227,10 +224,10 @@ This is useful for:
 **Example:**
 ```bash
 # Normal output
-clack users --limit 5
+clack users list --limit 5
 
 # With verbose logging
-clack users --limit 5 --verbose
+clack users list --limit 5 --verbose
 ```
 
 ## Authentication
@@ -287,13 +284,13 @@ Colorized, formatted output designed for terminal viewing:
 ### JSON Format
 Pretty-printed JSON output:
 ```bash
-clack users --format json
+clack users list --format json
 ```
 
 ### YAML Format
 Human-friendly YAML output:
 ```bash
-clack users --format yaml
+clack users list --format yaml
 ```
 
 ## Error Handling
@@ -307,32 +304,56 @@ Clack provides clear error messages:
 
 All errors are written to stderr, keeping stdout clean for piping.
 
-### Channels
-
 #### List all channels
 ```bash
-clack channels
+clack conversations list
 ```
 
 Lists all channels that the bot has access to, including both public and private channels (if the bot is a member).
 
 **Options:**
 - `--include-archived` - Include archived channels in the list
+- `--limit <n>` - Maximum number of channels per page (default: 200, max: 1000)
 - `--format <format>` - Output format: `human` (default), `json`, `yaml`
 
 **Examples:**
 ```bash
 # List all active channels
-clack channels
+clack conversations list
 
 # Include archived channels
-clack channels --include-archived
+clack conversations list --include-archived
 
 # Export as JSON
-clack channels --format json
+clack conversations list --format json
 
 # Find a specific channel
-clack channels | grep firmware
+clack conversations list | grep firmware
+```
+
+#### Get channel information
+```bash
+clack conversations info <channel>
+```
+
+Gets detailed information about a specific channel.
+
+**Arguments:**
+- `<channel>` - Channel ID (C1234ABCD), name with # (#general), or name without # (general)
+
+**Options:**
+- `--format <format>` - Output format: `human` (default), `json`, `yaml`
+
+**Examples:**
+```bash
+# Get channel info by ID
+clack conversations info C1234ABCD
+
+# Get channel info by name
+clack conversations info general
+
+# Export as JSON
+clack conversations info #engineering --format json
 ```
 
 **Output includes:**
@@ -519,10 +540,21 @@ clack search messages "deploy from:alice in:engineering after:2024-01-01"
 **Required Scopes:**
 - `search:read` - Required for all search commands
 
-## Future Commands (Not Yet Implemented)
+## Command Summary
 
-These commands are planned for future releases:
+```
+clack users list              # List all users
+clack users info <user_id>    # Get user information
 
-```bash
-clack channel <id>      # Get detailed channel info
+clack conversations list                        # List all channels
+clack conversations info <channel>              # Get channel information
+clack conversations history <channel>           # Get message history
+clack conversations replies <channel> <msg_ts>  # Get thread replies
+
+clack search messages <query>  # Search messages
+clack search files <query>     # Search files
+clack search all <query>       # Search messages and files
+clack search channels <query>  # Search channels by name
+
+clack auth test               # Test authentication
 ```

@@ -23,8 +23,32 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// List all users
+    /// User-related commands
     Users {
+        #[command(subcommand)]
+        command: UsersCommands,
+    },
+    /// Conversation-related commands (channels, messages, threads)
+    Conversations {
+        #[command(subcommand)]
+        command: ConversationsCommands,
+    },
+    /// Search for messages, files, or channels
+    Search {
+        #[command(subcommand)]
+        search_type: SearchType,
+    },
+    /// Authentication commands
+    Auth {
+        #[command(subcommand)]
+        auth_type: AuthType,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum UsersCommands {
+    /// List all users
+    List {
         /// Maximum number of users to return
         #[arg(long, default_value = "200")]
         limit: u32,
@@ -33,13 +57,32 @@ pub enum Commands {
         #[arg(long)]
         include_deleted: bool,
     },
-    /// Get a specific user by ID
-    User {
+    /// Get information about a specific user
+    Info {
         /// Slack user ID (e.g., U1234ABCD)
         user_id: String,
     },
-    /// List messages from a channel
-    Messages {
+}
+
+#[derive(Subcommand)]
+pub enum ConversationsCommands {
+    /// List all channels the bot has access to
+    List {
+        /// Include archived channels
+        #[arg(long)]
+        include_archived: bool,
+
+        /// Maximum number of channels to retrieve per page (default: 200, max: 1000)
+        #[arg(long, default_value = "200")]
+        limit: u32,
+    },
+    /// Get information about a specific channel
+    Info {
+        /// Channel ID or name (e.g., C1234ABCD, #general, or general)
+        channel: String,
+    },
+    /// Get message history from a channel
+    History {
         /// Channel ID or name
         channel: String,
 
@@ -55,33 +98,13 @@ pub enum Commands {
         #[arg(long)]
         oldest: Option<String>,
     },
-    /// Get a conversation thread and all its replies
-    Thread {
+    /// Get all replies in a conversation thread
+    Replies {
         /// Channel ID or name (e.g., C1234ABCD, #general, or general)
         channel: String,
 
         /// Message timestamp/ID (e.g., 1234567890.123456)
         message_ts: String,
-    },
-    /// List all channels the bot has access to
-    Channels {
-        /// Include archived channels
-        #[arg(long)]
-        include_archived: bool,
-
-        /// Maximum number of channels to retrieve per page (default: 200, max: 1000)
-        #[arg(long, default_value = "200")]
-        limit: u32,
-    },
-    /// Search for messages, files, or channels
-    Search {
-        #[command(subcommand)]
-        search_type: SearchType,
-    },
-    /// Authentication commands
-    Auth {
-        #[command(subcommand)]
-        auth_type: AuthType,
     },
 }
 
@@ -172,8 +195,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_users_command_parsing() {
-        let cli = Cli::parse_from(["clack", "users"]);
+    fn test_users_list_command_parsing() {
+        let cli = Cli::parse_from(["clack", "users", "list"]);
         assert!(matches!(cli.command, Commands::Users { .. }));
         assert_eq!(cli.format, "human");
         assert!(!cli.no_color);
@@ -181,53 +204,63 @@ mod tests {
     }
 
     #[test]
-    fn test_users_command_with_options() {
-        let cli = Cli::parse_from(["clack", "users", "--limit", "50", "--include-deleted"]);
+    fn test_users_list_command_with_options() {
+        let cli = Cli::parse_from(["clack", "users", "list", "--limit", "50", "--include-deleted"]);
         match cli.command {
-            Commands::Users {
-                limit,
-                include_deleted,
-            } => {
-                assert_eq!(limit, 50);
-                assert!(include_deleted);
-            }
+            Commands::Users { command } => match command {
+                UsersCommands::List {
+                    limit,
+                    include_deleted,
+                } => {
+                    assert_eq!(limit, 50);
+                    assert!(include_deleted);
+                }
+                _ => panic!("Expected Users List command"),
+            },
             _ => panic!("Expected Users command"),
         }
     }
 
     #[test]
-    fn test_user_command_with_id() {
-        let cli = Cli::parse_from(["clack", "user", "U123"]);
+    fn test_users_info_command_with_id() {
+        let cli = Cli::parse_from(["clack", "users", "info", "U123"]);
         match cli.command {
-            Commands::User { user_id } => assert_eq!(user_id, "U123"),
-            _ => panic!("Expected User command"),
+            Commands::Users { command } => match command {
+                UsersCommands::Info { user_id } => assert_eq!(user_id, "U123"),
+                _ => panic!("Expected Users Info command"),
+            },
+            _ => panic!("Expected Users command"),
         }
     }
 
     #[test]
-    fn test_messages_command_basic() {
-        let cli = Cli::parse_from(["clack", "messages", "C123"]);
+    fn test_conversations_history_command_basic() {
+        let cli = Cli::parse_from(["clack", "conversations", "history", "C123"]);
         match cli.command {
-            Commands::Messages {
-                channel,
-                limit,
-                latest,
-                oldest,
-            } => {
-                assert_eq!(channel, "C123");
-                assert_eq!(limit, 200); // default value
-                assert_eq!(latest, None);
-                assert_eq!(oldest, None);
-            }
-            _ => panic!("Expected Messages command"),
+            Commands::Conversations { command } => match command {
+                ConversationsCommands::History {
+                    channel,
+                    limit,
+                    latest,
+                    oldest,
+                } => {
+                    assert_eq!(channel, "C123");
+                    assert_eq!(limit, 200); // default value
+                    assert_eq!(latest, None);
+                    assert_eq!(oldest, None);
+                }
+                _ => panic!("Expected Conversations History command"),
+            },
+            _ => panic!("Expected Conversations command"),
         }
     }
 
     #[test]
-    fn test_messages_command_with_options() {
+    fn test_conversations_history_command_with_options() {
         let cli = Cli::parse_from([
             "clack",
-            "messages",
+            "conversations",
+            "history",
             "C123",
             "--limit",
             "50",
@@ -237,90 +270,119 @@ mod tests {
             "1234567800",
         ]);
         match cli.command {
-            Commands::Messages {
-                channel,
-                limit,
-                latest,
-                oldest,
-            } => {
-                assert_eq!(channel, "C123");
-                assert_eq!(limit, 50);
-                assert_eq!(latest, Some("1234567890".to_string()));
-                assert_eq!(oldest, Some("1234567800".to_string()));
-            }
-            _ => panic!("Expected Messages command"),
+            Commands::Conversations { command } => match command {
+                ConversationsCommands::History {
+                    channel,
+                    limit,
+                    latest,
+                    oldest,
+                } => {
+                    assert_eq!(channel, "C123");
+                    assert_eq!(limit, 50);
+                    assert_eq!(latest, Some("1234567890".to_string()));
+                    assert_eq!(oldest, Some("1234567800".to_string()));
+                }
+                _ => panic!("Expected Conversations History command"),
+            },
+            _ => panic!("Expected Conversations command"),
         }
     }
 
     #[test]
     fn test_global_format_option() {
-        let cli = Cli::parse_from(["clack", "--format", "json", "users"]);
+        let cli = Cli::parse_from(["clack", "--format", "json", "users", "list"]);
         assert_eq!(cli.format, "json");
     }
 
     #[test]
     fn test_global_no_color_option() {
-        let cli = Cli::parse_from(["clack", "--no-color", "users"]);
+        let cli = Cli::parse_from(["clack", "--no-color", "users", "list"]);
         assert!(cli.no_color);
     }
 
     #[test]
     fn test_global_verbose_option() {
-        let cli = Cli::parse_from(["clack", "-v", "users"]);
+        let cli = Cli::parse_from(["clack", "-v", "users", "list"]);
         assert!(cli.verbose);
     }
 
     #[test]
-    fn test_thread_command() {
-        let cli = Cli::parse_from(["clack", "thread", "C123", "1234567890.123456"]);
+    fn test_conversations_replies_command() {
+        let cli = Cli::parse_from(["clack", "conversations", "replies", "C123", "1234567890.123456"]);
         match cli.command {
-            Commands::Thread {
-                channel,
-                message_ts,
-            } => {
-                assert_eq!(channel, "C123");
-                assert_eq!(message_ts, "1234567890.123456");
-            }
-            _ => panic!("Expected Thread command"),
+            Commands::Conversations { command } => match command {
+                ConversationsCommands::Replies {
+                    channel,
+                    message_ts,
+                } => {
+                    assert_eq!(channel, "C123");
+                    assert_eq!(message_ts, "1234567890.123456");
+                }
+                _ => panic!("Expected Conversations Replies command"),
+            },
+            _ => panic!("Expected Conversations command"),
         }
     }
 
     #[test]
-    fn test_thread_command_with_channel_name() {
-        let cli = Cli::parse_from(["clack", "thread", "#general", "1234567890.123456"]);
+    fn test_conversations_replies_command_with_channel_name() {
+        let cli = Cli::parse_from(["clack", "conversations", "replies", "#general", "1234567890.123456"]);
         match cli.command {
-            Commands::Thread {
-                channel,
-                message_ts,
-            } => {
-                assert_eq!(channel, "#general");
-                assert_eq!(message_ts, "1234567890.123456");
-            }
-            _ => panic!("Expected Thread command"),
+            Commands::Conversations { command } => match command {
+                ConversationsCommands::Replies {
+                    channel,
+                    message_ts,
+                } => {
+                    assert_eq!(channel, "#general");
+                    assert_eq!(message_ts, "1234567890.123456");
+                }
+                _ => panic!("Expected Conversations Replies command"),
+            },
+            _ => panic!("Expected Conversations command"),
         }
     }
 
     #[test]
-    fn test_channels_command() {
-        let cli = Cli::parse_from(["clack", "channels"]);
+    fn test_conversations_list_command() {
+        let cli = Cli::parse_from(["clack", "conversations", "list"]);
         match cli.command {
-            Commands::Channels { include_archived, limit } => {
-                assert!(!include_archived);
-                assert_eq!(limit, 200); // default value
-            }
-            _ => panic!("Expected Channels command"),
+            Commands::Conversations { command } => match command {
+                ConversationsCommands::List { include_archived, limit } => {
+                    assert!(!include_archived);
+                    assert_eq!(limit, 200); // default value
+                }
+                _ => panic!("Expected Conversations List command"),
+            },
+            _ => panic!("Expected Conversations command"),
         }
     }
 
     #[test]
-    fn test_channels_command_with_archived() {
-        let cli = Cli::parse_from(["clack", "channels", "--include-archived"]);
+    fn test_conversations_list_command_with_archived() {
+        let cli = Cli::parse_from(["clack", "conversations", "list", "--include-archived"]);
         match cli.command {
-            Commands::Channels { include_archived, limit } => {
-                assert!(include_archived);
-                assert_eq!(limit, 200); // default value
-            }
-            _ => panic!("Expected Channels command"),
+            Commands::Conversations { command } => match command {
+                ConversationsCommands::List { include_archived, limit } => {
+                    assert!(include_archived);
+                    assert_eq!(limit, 200); // default value
+                }
+                _ => panic!("Expected Conversations List command"),
+            },
+            _ => panic!("Expected Conversations command"),
+        }
+    }
+
+    #[test]
+    fn test_conversations_info_command() {
+        let cli = Cli::parse_from(["clack", "conversations", "info", "C123"]);
+        match cli.command {
+            Commands::Conversations { command } => match command {
+                ConversationsCommands::Info { channel } => {
+                    assert_eq!(channel, "C123");
+                }
+                _ => panic!("Expected Conversations Info command"),
+            },
+            _ => panic!("Expected Conversations command"),
         }
     }
 

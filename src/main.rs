@@ -6,7 +6,7 @@ mod output;
 
 use anyhow::Result;
 use clap::Parser;
-use cli::{AuthType, Cli, Commands, SearchType};
+use cli::{AuthType, Cli, Commands, ConversationsCommands, SearchType, UsersCommands};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -20,130 +20,149 @@ async fn main() -> Result<()> {
 
     // Execute command
     match cli.command {
-        Commands::Users {
-            limit,
-            include_deleted,
-        } => {
-            let users = api::users::list_users(&client, limit, include_deleted).await?;
+        Commands::Users { command } => match command {
+            UsersCommands::List {
+                limit,
+                include_deleted,
+            } => {
+                let users = api::users::list_users(&client, limit, include_deleted).await?;
 
-            match cli.format.as_str() {
-                "json" => println!("{}", serde_json::to_string_pretty(&users)?),
-                "yaml" => println!("{}", serde_yaml::to_string(&users)?),
-                _ => {
-                    let mut writer = output::color::ColorWriter::new(cli.no_color);
-                    output::user_formatter::format_users_list(&users, &mut writer)?;
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&users)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&users)?),
+                    _ => {
+                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                        output::user_formatter::format_users_list(&users, &mut writer)?;
+                    }
                 }
             }
-        }
-        Commands::User { user_id } => {
-            let user = api::users::get_user(&client, &user_id).await?;
+            UsersCommands::Info { user_id } => {
+                let user = api::users::get_user(&client, &user_id).await?;
 
-            match cli.format.as_str() {
-                "json" => println!("{}", serde_json::to_string_pretty(&user)?),
-                "yaml" => println!("{}", serde_yaml::to_string(&user)?),
-                _ => {
-                    let mut writer = output::color::ColorWriter::new(cli.no_color);
-                    output::user_formatter::format_user(&user, &mut writer)?;
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&user)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&user)?),
+                    _ => {
+                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                        output::user_formatter::format_user(&user, &mut writer)?;
+                    }
                 }
             }
-        }
-        Commands::Messages {
-            channel,
-            limit,
-            latest,
-            oldest,
-        } => {
-            // Resolve channel name to ID if needed
-            let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
+        },
+        Commands::Conversations { command } => match command {
+            ConversationsCommands::List { include_archived, limit } => {
+                let channels = api::channels::list_channels(&client, include_archived, limit).await?;
 
-            let messages =
-                api::messages::list_messages(&client, &channel_id, limit, latest, oldest).await?;
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&channels)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&channels)?),
+                    _ => {
+                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                        output::channel_formatter::format_channels_list(&channels, &mut writer)?;
+                    }
+                }
+            }
+            ConversationsCommands::Info { channel } => {
+                // Resolve channel name to ID if needed
+                let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
+                let channel_info = api::channels::get_channel(&client, &channel_id).await?;
 
-            match cli.format.as_str() {
-                "json" => println!("{}", serde_json::to_string_pretty(&messages)?),
-                "yaml" => println!("{}", serde_yaml::to_string(&messages)?),
-                _ => {
-                    // Fetch channel info for metadata
-                    let channel_info = api::channels::get_channel(&client, &channel_id).await?;
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&channel_info)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&channel_info)?),
+                    _ => {
+                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                        // Reuse format_channels_list with a single-element vector
+                        output::channel_formatter::format_channels_list(&vec![channel_info], &mut writer)?;
+                    }
+                }
+            }
+            ConversationsCommands::History {
+                channel,
+                limit,
+                latest,
+                oldest,
+            } => {
+                // Resolve channel name to ID if needed
+                let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
 
-                    // Build user lookup map - only fetch users mentioned in messages
-                    let mut user_map: std::collections::HashMap<String, models::user::User> =
-                        std::collections::HashMap::new();
+                let messages =
+                    api::messages::list_messages(&client, &channel_id, limit, latest, oldest).await?;
 
-                    for message in &messages {
-                        if let Some(user_id) = &message.user {
-                            if !user_map.contains_key(user_id) {
-                                // Fetch individual user (cache-first)
-                                if let Ok(user) = api::users::get_user(&client, user_id).await {
-                                    user_map.insert(user.id.clone(), user);
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&messages)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&messages)?),
+                    _ => {
+                        // Fetch channel info for metadata
+                        let channel_info = api::channels::get_channel(&client, &channel_id).await?;
+
+                        // Build user lookup map - only fetch users mentioned in messages
+                        let mut user_map: std::collections::HashMap<String, models::user::User> =
+                            std::collections::HashMap::new();
+
+                        for message in &messages {
+                            if let Some(user_id) = &message.user {
+                                if !user_map.contains_key(user_id) {
+                                    // Fetch individual user (cache-first)
+                                    if let Ok(user) = api::users::get_user(&client, user_id).await {
+                                        user_map.insert(user.id.clone(), user);
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    let mut writer = output::color::ColorWriter::new(cli.no_color);
-                    output::message_formatter::format_messages(
-                        &messages,
-                        &channel_info,
-                        &user_map,
-                        &mut writer,
-                    )?;
+                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                        output::message_formatter::format_messages(
+                            &messages,
+                            &channel_info,
+                            &user_map,
+                            &mut writer,
+                        )?;
+                    }
                 }
             }
-        }
-        Commands::Thread {
-            channel,
-            message_ts,
-        } => {
-            // Resolve channel name to ID if needed
-            let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
+            ConversationsCommands::Replies {
+                channel,
+                message_ts,
+            } => {
+                // Resolve channel name to ID if needed
+                let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
 
-            let messages = api::messages::get_thread(&client, &channel_id, &message_ts).await?;
+                let messages = api::messages::get_thread(&client, &channel_id, &message_ts).await?;
 
-            match cli.format.as_str() {
-                "json" => println!("{}", serde_json::to_string_pretty(&messages)?),
-                "yaml" => println!("{}", serde_yaml::to_string(&messages)?),
-                _ => {
-                    // Fetch channel info for metadata
-                    let channel_info = api::channels::get_channel(&client, &channel_id).await?;
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&messages)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&messages)?),
+                    _ => {
+                        // Fetch channel info for metadata
+                        let channel_info = api::channels::get_channel(&client, &channel_id).await?;
 
-                    // Build user lookup map - only fetch users mentioned in thread
-                    let mut user_map: std::collections::HashMap<String, models::user::User> =
-                        std::collections::HashMap::new();
+                        // Build user lookup map - only fetch users mentioned in thread
+                        let mut user_map: std::collections::HashMap<String, models::user::User> =
+                            std::collections::HashMap::new();
 
-                    for message in &messages {
-                        if let Some(user_id) = &message.user {
-                            if !user_map.contains_key(user_id) {
-                                // Fetch individual user (cache-first)
-                                if let Ok(user) = api::users::get_user(&client, user_id).await {
-                                    user_map.insert(user.id.clone(), user);
+                        for message in &messages {
+                            if let Some(user_id) = &message.user {
+                                if !user_map.contains_key(user_id) {
+                                    // Fetch individual user (cache-first)
+                                    if let Ok(user) = api::users::get_user(&client, user_id).await {
+                                        user_map.insert(user.id.clone(), user);
+                                    }
                                 }
                             }
                         }
+
+                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                        output::thread_formatter::format_thread(
+                            &messages,
+                            &channel_info,
+                            &user_map,
+                            &mut writer,
+                        )?;
                     }
-
-                    let mut writer = output::color::ColorWriter::new(cli.no_color);
-                    output::thread_formatter::format_thread(
-                        &messages,
-                        &channel_info,
-                        &user_map,
-                        &mut writer,
-                    )?;
                 }
             }
-        }
-        Commands::Channels { include_archived, limit } => {
-            let channels = api::channels::list_channels(&client, include_archived, limit).await?;
-
-            match cli.format.as_str() {
-                "json" => println!("{}", serde_json::to_string_pretty(&channels)?),
-                "yaml" => println!("{}", serde_yaml::to_string(&channels)?),
-                _ => {
-                    let mut writer = output::color::ColorWriter::new(cli.no_color);
-                    output::channel_formatter::format_channels_list(&channels, &mut writer)?;
-                }
-            }
-        }
+        },
         Commands::Search { search_type } => match search_type {
             SearchType::Messages {
                 query,

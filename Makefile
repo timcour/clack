@@ -1,9 +1,12 @@
-.PHONY: clack test deps all clean
+.PHONY: clack build test deps all clean
 
 # Default target
 clack:
 	cargo build --release
 	@echo "Binary built: target/release/clack"
+
+build:
+	cargo build
 
 test:
 	cargo test --all-features
