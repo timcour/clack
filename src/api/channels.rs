@@ -42,16 +42,18 @@ async fn list_channels_and_find(client: &SlackClient, name: &str) -> Result<Stri
         .workspace_id()
         .ok_or_else(|| anyhow::anyhow!("Workspace ID not initialized"))?;
 
-    // Try cache first to avoid API calls
-    if let Some(pool) = client.cache_pool() {
-        if let Ok(mut conn) = cache::get_connection(pool).await {
-            if let Ok(Some(cached_channels)) = cache::operations::get_conversations(&mut conn, workspace_id, client.verbose()) {
-                // Search cached channels first
-                if let Some(channel) = cached_channels.iter().find(|ch| ch.name == name) {
-                    if client.verbose() {
-                        eprintln!("[CACHE] Channel '{}' resolved from cache to {}", name, channel.id);
+    // Try cache first to avoid API calls (unless refresh requested)
+    if !client.refresh_cache() {
+        if let Some(pool) = client.cache_pool() {
+            if let Ok(mut conn) = cache::get_connection(pool).await {
+                if let Ok(Some(cached_channels)) = cache::operations::get_conversations(&mut conn, workspace_id, client.verbose()) {
+                    // Search cached channels first
+                    if let Some(channel) = cached_channels.iter().find(|ch| ch.name == name) {
+                        if client.verbose() {
+                            eprintln!("[CACHE] Channel '{}' resolved from cache to {}", name, channel.id);
+                        }
+                        return Ok(channel.id.clone());
                     }
-                    return Ok(channel.id.clone());
                 }
             }
         }
@@ -194,30 +196,34 @@ pub async fn get_channel(client: &SlackClient, channel_id: &str) -> Result<Chann
         .workspace_id()
         .ok_or_else(|| anyhow::anyhow!("Workspace ID not initialized"))?;
 
-    // Try cache first
-    if let Some(pool) = client.cache_pool() {
-        match cache::get_connection(pool).await {
-            Ok(mut conn) => {
-                match cache::operations::get_conversation(&mut conn, workspace_id, channel_id, client.verbose()) {
-                    Ok(Some(cached_channel)) => {
-                        return Ok(cached_channel);
-                    }
-                    Ok(None) => {
-                        // Cache miss, continue to API
-                    }
-                    Err(e) => {
-                        if client.verbose() {
-                            eprintln!("[CACHE] Error reading cache: {}", e);
+    // Try cache first (unless refresh requested)
+    if !client.refresh_cache() {
+        if let Some(pool) = client.cache_pool() {
+            match cache::get_connection(pool).await {
+                Ok(mut conn) => {
+                    match cache::operations::get_conversation(&mut conn, workspace_id, channel_id, client.verbose()) {
+                        Ok(Some(cached_channel)) => {
+                            return Ok(cached_channel);
+                        }
+                        Ok(None) => {
+                            // Cache miss, continue to API
+                        }
+                        Err(e) => {
+                            if client.verbose() {
+                                eprintln!("[CACHE] Error reading cache: {}", e);
+                            }
                         }
                     }
                 }
-            }
-            Err(e) => {
-                if client.verbose() {
-                    eprintln!("[CACHE] Failed to get connection: {}", e);
+                Err(e) => {
+                    if client.verbose() {
+                        eprintln!("[CACHE] Failed to get connection: {}", e);
+                    }
                 }
             }
         }
+    } else if client.verbose() {
+        eprintln!("[CACHE] Conversation {} - SKIP (refresh requested)", channel_id);
     }
 
     // Fetch from API
@@ -325,7 +331,7 @@ mod tests {
 
         let mut server = mockito::Server::new_async().await;
         std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
-        let mut client = SlackClient::with_base_url(&server.url(), false, false).await.unwrap();
+        let mut client = SlackClient::with_base_url(&server.url(), false, false, false).await.unwrap();
 
         // Mock auth.test for workspace initialization with unique workspace ID
         let auth_body = format!(
@@ -701,5 +707,75 @@ mod tests {
         let results2 = search_channels(&client, "MARK", false).await.unwrap();
         assert_eq!(results2.len(), 1);
         assert_eq!(results2[0].name, "MARKETING");
+    }
+
+    #[tokio::test]
+    async fn test_get_channel_with_refresh_cache() {
+        let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let workspace_id = format!("T{}", test_id);
+
+        let mut server = mockito::Server::new_async().await;
+        std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
+
+        // Create client with refresh_cache=true
+        let mut client = SlackClient::with_base_url(&server.url(), false, false, true).await.unwrap();
+
+        // Mock auth.test
+        let auth_body = format!(
+            r#"{{"ok": true, "url": "https://test.slack.com/", "team_id": "{}", "team": "Test Team", "user": "testuser", "user_id": "U123"}}"#,
+            workspace_id
+        );
+        let _auth_mock = server
+            .mock("GET", "/auth.test")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(auth_body)
+            .create();
+
+        client.init_workspace().await.unwrap();
+
+        // Pre-populate cache with stale data
+        if let Some(pool) = client.cache_pool() {
+            if let Ok(mut conn) = crate::cache::get_connection(pool).await {
+                let stale_channel = Channel {
+                    id: "CREFRESH".to_string(),
+                    name: "stale-channel".to_string(),
+                    is_channel: Some(true),
+                    is_group: None,
+                    is_im: None,
+                    is_mpim: None,
+                    is_private: Some(false),
+                    is_archived: Some(false),
+                    topic: None,
+                    purpose: None,
+                    num_members: None,
+                };
+                let _ = crate::cache::operations::upsert_conversation(&mut conn, &workspace_id, &stale_channel, false);
+            }
+        }
+
+        // Mock API response with fresh data
+        let _mock = server
+            .mock("GET", "/conversations.info?channel=CREFRESH")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{
+            "ok": true,
+            "channel": {
+                "id": "CREFRESH",
+                "name": "fresh-channel",
+                "is_channel": true,
+                "is_private": false,
+                "is_archived": false
+            }
+        }"#,
+            )
+            .create_async()
+            .await;
+
+        // Call get_channel - should skip cache and get fresh data from API
+        let channel = get_channel(&client, "CREFRESH").await.unwrap();
+        assert_eq!(channel.name, "fresh-channel", "Should get fresh data from API, not stale cache");
     }
 }

@@ -18,20 +18,21 @@ pub struct SlackClient {
     base_url: String,
     verbose: bool,
     debug_response: bool,
+    refresh_cache: bool,
     workspace_id: Option<String>,
     cache_pool: Option<CachePool>,
 }
 
 impl SlackClient {
     pub async fn new_verbose(verbose: bool) -> Result<Self> {
-        Self::with_base_url("https://slack.com/api", verbose, false).await
+        Self::with_base_url("https://slack.com/api", verbose, false, false).await
     }
 
-    pub async fn new(verbose: bool, debug_response: bool) -> Result<Self> {
-        Self::with_base_url("https://slack.com/api", verbose, debug_response).await
+    pub async fn new(verbose: bool, debug_response: bool, refresh_cache: bool) -> Result<Self> {
+        Self::with_base_url("https://slack.com/api", verbose, debug_response, refresh_cache).await
     }
 
-    pub async fn with_base_url(base_url: &str, verbose: bool, debug_response: bool) -> Result<Self> {
+    pub async fn with_base_url(base_url: &str, verbose: bool, debug_response: bool, refresh_cache: bool) -> Result<Self> {
         let token = env::var("SLACK_TOKEN").context(
             "SLACK_TOKEN environment variable not set\n\n\
              Please set your Slack API token:\n  \
@@ -66,6 +67,7 @@ impl SlackClient {
             base_url: base_url.to_string(),
             verbose,
             debug_response,
+            refresh_cache,
             workspace_id: None,
             cache_pool,
         })
@@ -257,5 +259,10 @@ impl SlackClient {
     /// Check if verbose mode is enabled
     pub fn verbose(&self) -> bool {
         self.verbose
+    }
+
+    /// Check if cache refresh is enabled
+    pub fn refresh_cache(&self) -> bool {
+        self.refresh_cache
     }
 }

@@ -42,30 +42,34 @@ pub async fn get_user(client: &SlackClient, user_id: &str) -> Result<User> {
         .workspace_id()
         .ok_or_else(|| anyhow::anyhow!("Workspace ID not initialized"))?;
 
-    // Try cache first
-    if let Some(pool) = client.cache_pool() {
-        match cache::get_connection(pool).await {
-            Ok(mut conn) => {
-                match cache::operations::get_user(&mut conn, workspace_id, user_id, client.verbose()) {
-                    Ok(Some(cached_user)) => {
-                        return Ok(cached_user);
-                    }
-                    Ok(None) => {
-                        // Cache miss, continue to API
-                    }
-                    Err(e) => {
-                        if client.verbose() {
-                            eprintln!("[CACHE] Error reading cache: {}", e);
+    // Try cache first (unless refresh requested)
+    if !client.refresh_cache() {
+        if let Some(pool) = client.cache_pool() {
+            match cache::get_connection(pool).await {
+                Ok(mut conn) => {
+                    match cache::operations::get_user(&mut conn, workspace_id, user_id, client.verbose()) {
+                        Ok(Some(cached_user)) => {
+                            return Ok(cached_user);
+                        }
+                        Ok(None) => {
+                            // Cache miss, continue to API
+                        }
+                        Err(e) => {
+                            if client.verbose() {
+                                eprintln!("[CACHE] Error reading cache: {}", e);
+                            }
                         }
                     }
                 }
-            }
-            Err(e) => {
-                if client.verbose() {
-                    eprintln!("[CACHE] Failed to get connection: {}", e);
+                Err(e) => {
+                    if client.verbose() {
+                        eprintln!("[CACHE] Failed to get connection: {}", e);
+                    }
                 }
             }
         }
+    } else if client.verbose() {
+        eprintln!("[CACHE] User {} - SKIP (refresh requested)", user_id);
     }
 
     // Fetch from API
@@ -118,7 +122,7 @@ mod tests {
 
         let mut server = mockito::Server::new_async().await;
         std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
-        let mut client = SlackClient::with_base_url(&server.url(), false, false).await.unwrap();
+        let mut client = SlackClient::with_base_url(&server.url(), false, false, false).await.unwrap();
 
         // Mock auth.test for workspace initialization with unique workspace ID
         let auth_body = format!(
@@ -293,5 +297,84 @@ mod tests {
         let result = get_user(&client, "U999").await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("user_not_found"));
+    }
+
+    #[tokio::test]
+    async fn test_get_user_with_refresh_cache() {
+        let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let workspace_id = format!("T{}", test_id);
+
+        let mut server = mockito::Server::new_async().await;
+        std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
+
+        // Create client with refresh_cache=true
+        let mut client = SlackClient::with_base_url(&server.url(), false, false, true).await.unwrap();
+
+        // Mock auth.test
+        let auth_body = format!(
+            r#"{{"ok": true, "url": "https://test.slack.com/", "team_id": "{}", "team": "Test Team", "user": "testuser", "user_id": "U123"}}"#,
+            workspace_id
+        );
+        let _auth_mock = server
+            .mock("GET", "/auth.test")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(auth_body)
+            .create();
+
+        client.init_workspace().await.unwrap();
+
+        // Pre-populate cache with stale data
+        if let Some(pool) = client.cache_pool() {
+            if let Ok(mut conn) = cache::get_connection(pool).await {
+                let stale_user = User {
+                    id: "UREFRESH".to_string(),
+                    name: "staleuser".to_string(),
+                    real_name: Some("Stale User".to_string()),
+                    deleted: false,
+                    is_bot: false,
+                    is_admin: None,
+                    is_owner: None,
+                    tz: None,
+                    profile: crate::models::user::UserProfile {
+                        email: Some("stale@example.com".to_string()),
+                        display_name: Some("staleuser".to_string()),
+                        status_emoji: None,
+                        status_text: None,
+                        image_72: None,
+                    },
+                };
+                let _ = cache::operations::upsert_user(&mut conn, &workspace_id, &stale_user, false);
+            }
+        }
+
+        // Mock API response with fresh data
+        let _mock = server
+            .mock("GET", "/users.info?user=UREFRESH")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{
+            "ok": true,
+            "user": {
+                "id": "UREFRESH",
+                "name": "freshuser",
+                "real_name": "Fresh User",
+                "deleted": false,
+                "is_bot": false,
+                "profile": {
+                    "email": "fresh@example.com",
+                    "display_name": "freshuser"
+                }
+            }
+        }"#,
+            )
+            .create_async()
+            .await;
+
+        // Call get_user - should skip cache and get fresh data from API
+        let user = get_user(&client, "UREFRESH").await.unwrap();
+        assert_eq!(user.name, "freshuser", "Should get fresh data from API, not stale cache");
+        assert_eq!(user.profile.email, Some("fresh@example.com".to_string()));
     }
 }

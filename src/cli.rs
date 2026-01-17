@@ -23,6 +23,10 @@ pub struct Cli {
     /// Show raw HTTP response bodies for debugging
     #[arg(long, global = true)]
     pub debug_response: bool,
+
+    /// Force cache refresh - bypass cache and query API directly
+    #[arg(long, global = true)]
+    pub refresh_cache: bool,
 }
 
 #[derive(Subcommand)]
@@ -671,5 +675,38 @@ mod tests {
             },
             _ => panic!("Expected Auth command"),
         }
+    }
+
+    #[test]
+    fn test_global_refresh_cache_option() {
+        let cli = Cli::parse_from(["clack", "--refresh-cache", "users", "list"]);
+        assert!(cli.refresh_cache);
+    }
+
+    #[test]
+    fn test_refresh_cache_before_subcommand() {
+        let cli = Cli::parse_from(["clack", "--refresh-cache", "conversations", "info", "C123"]);
+        assert!(cli.refresh_cache);
+        match cli.command {
+            Commands::Conversations { command } => match command {
+                ConversationsCommands::Info { channel } => {
+                    assert_eq!(channel, "C123");
+                }
+                _ => panic!("Expected Conversations Info command"),
+            },
+            _ => panic!("Expected Conversations command"),
+        }
+    }
+
+    #[test]
+    fn test_refresh_cache_after_subcommand() {
+        let cli = Cli::parse_from(["clack", "conversations", "info", "--refresh-cache", "C123"]);
+        assert!(cli.refresh_cache);
+    }
+
+    #[test]
+    fn test_refresh_cache_default_false() {
+        let cli = Cli::parse_from(["clack", "users", "list"]);
+        assert!(!cli.refresh_cache);
     }
 }
