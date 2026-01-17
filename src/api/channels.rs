@@ -346,6 +346,11 @@ mod tests {
             .create();
 
         client.init_workspace().await.unwrap();
+        if let Some(pool) = client.cache_pool() {
+            if let Ok(mut conn) = cache::get_connection(pool).await {
+                let _ = cache::operations::clear_workspace_cache(&mut conn, &workspace_id, false);
+            }
+        }
 
         (server, client)
     }
