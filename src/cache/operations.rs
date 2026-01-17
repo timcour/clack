@@ -10,9 +10,9 @@ use crate::models::message::Message;
 use crate::models::user::User;
 
 // TTL constants (in seconds)
-const USER_TTL_SECONDS: i64 = 3600; // 1 hour
-const CONVERSATION_TTL_SECONDS: i64 = 1800; // 30 minutes
-const MESSAGE_TTL_SECONDS: i64 = 300; // 5 minutes
+const USER_TTL_SECONDS: i64 = 3600 * 24 * 7; // 1 week
+const CONVERSATION_TTL_SECONDS: i64 = 3600 * 24 * 7; // 1 week
+const MESSAGE_TTL_SECONDS: i64 = 3600 * 24 * 7; // 1 week
 
 /// Check if a cached item is fresh based on TTL
 fn is_fresh(cached_at: chrono::NaiveDateTime, ttl_seconds: i64) -> bool {
