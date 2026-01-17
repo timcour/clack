@@ -1,6 +1,6 @@
 use super::client::SlackClient;
 use crate::cache;
-use crate::models::user::{User, UserInfoResponse, UsersListResponse};
+use crate::models::user::{User, UserInfoResponse, UserProfile, UserProfileResponse, UsersListResponse};
 use anyhow::Result;
 
 pub async fn list_users(
@@ -86,6 +86,23 @@ pub async fn get_user(client: &SlackClient, user_id: &str) -> Result<User> {
     }
 
     Ok(user)
+}
+
+pub async fn get_profile(client: &SlackClient, user_id: Option<&str>) -> Result<UserProfile> {
+    // Build query - if user_id is None, Slack API will return the authenticated user's profile
+    let query = if let Some(uid) = user_id {
+        vec![("user", uid.to_string())]
+    } else {
+        vec![]
+    };
+
+    let response: UserProfileResponse = client.get("users.profile.get", &query).await?;
+
+    if !response.ok {
+        anyhow::bail!("Slack API error: {}", response.error.unwrap_or_default());
+    }
+
+    Ok(response.profile)
 }
 
 #[cfg(test)]

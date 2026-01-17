@@ -245,6 +245,55 @@ pub async fn search_channels(
     Ok(matching_channels)
 }
 
+pub async fn get_members(client: &SlackClient, channel: &str, limit: u32) -> Result<Vec<String>> {
+    let mut query = vec![
+        ("channel", channel.to_string()),
+        ("limit", limit.to_string()),
+    ];
+
+    let mut all_members = Vec::new();
+    let mut cursor: Option<String> = None;
+
+    loop {
+        if let Some(ref c) = cursor {
+            query.push(("cursor", c.clone()));
+        }
+
+        #[derive(serde::Deserialize)]
+        struct MembersResponse {
+            ok: bool,
+            members: Vec<String>,
+            response_metadata: Option<ResponseMetadata>,
+            error: Option<String>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct ResponseMetadata {
+            next_cursor: Option<String>,
+        }
+
+        let response: MembersResponse = client.get("conversations.members", &query).await?;
+
+        if !response.ok {
+            anyhow::bail!("Slack API error: {}", response.error.unwrap_or_default());
+        }
+
+        all_members.extend(response.members);
+
+        // Check if there are more pages
+        match response.response_metadata {
+            Some(metadata) if metadata.next_cursor.is_some() && !metadata.next_cursor.as_ref().unwrap().is_empty() => {
+                cursor = metadata.next_cursor;
+                // Remove the old cursor from query before adding new one
+                query.retain(|(k, _)| k != &"cursor");
+            }
+            _ => break,
+        }
+    }
+
+    Ok(all_members)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

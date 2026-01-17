@@ -33,6 +33,26 @@ pub enum Commands {
         #[command(subcommand)]
         command: ConversationsCommands,
     },
+    /// File-related commands
+    Files {
+        #[command(subcommand)]
+        command: FilesCommands,
+    },
+    /// Pin-related commands
+    Pins {
+        #[command(subcommand)]
+        command: PinsCommands,
+    },
+    /// Reaction-related commands
+    Reactions {
+        #[command(subcommand)]
+        command: ReactionsCommands,
+    },
+    /// Chat/message posting commands
+    Chat {
+        #[command(subcommand)]
+        command: ChatCommands,
+    },
     /// Search for messages, files, or channels
     Search {
         #[command(subcommand)]
@@ -61,6 +81,20 @@ pub enum UsersCommands {
     Info {
         /// Slack user ID (e.g., U1234ABCD)
         user_id: String,
+    },
+    /// Get user profile information
+    Profile {
+        #[command(subcommand)]
+        command: ProfileCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ProfileCommands {
+    /// Get user profile
+    Get {
+        /// Slack user ID (optional, defaults to authenticated user)
+        user_id: Option<String>,
     },
 }
 
@@ -105,6 +139,15 @@ pub enum ConversationsCommands {
 
         /// Message timestamp/ID (e.g., 1234567890.123456)
         message_ts: String,
+    },
+    /// Get list of members in a conversation
+    Members {
+        /// Channel ID or name (e.g., C1234ABCD, #general, or general)
+        channel: String,
+
+        /// Maximum number of members to retrieve
+        #[arg(long, default_value = "200")]
+        limit: u32,
     },
 }
 
@@ -181,6 +224,96 @@ pub enum SearchType {
         /// Include archived channels
         #[arg(long)]
         include_archived: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum FilesCommands {
+    /// List files in the workspace
+    List {
+        /// Maximum number of files to return
+        #[arg(long, default_value = "200")]
+        limit: u32,
+
+        /// Filter by user (user ID)
+        #[arg(long)]
+        user: Option<String>,
+
+        /// Filter by channel (channel ID or name)
+        #[arg(long)]
+        channel: Option<String>,
+    },
+    /// Get information about a specific file
+    Info {
+        /// File ID (e.g., F1234ABCD)
+        file_id: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum PinsCommands {
+    /// List pinned items in a channel
+    List {
+        /// Channel ID or name (e.g., C1234ABCD, #general, or general)
+        channel: String,
+    },
+    /// Pin a message to a channel
+    Add {
+        /// Channel ID or name (e.g., C1234ABCD, #general, or general)
+        channel: String,
+
+        /// Message timestamp to pin (e.g., 1234567890.123456)
+        message_ts: String,
+    },
+    /// Remove a pin from a channel
+    Remove {
+        /// Channel ID or name (e.g., C1234ABCD, #general, or general)
+        channel: String,
+
+        /// Message timestamp to unpin (e.g., 1234567890.123456)
+        message_ts: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ReactionsCommands {
+    /// Add a reaction to a message
+    Add {
+        /// Channel ID or name (e.g., C1234ABCD, #general, or general)
+        channel: String,
+
+        /// Message timestamp (e.g., 1234567890.123456)
+        message_ts: String,
+
+        /// Emoji name (without colons, e.g., thumbsup, heart, rocket)
+        emoji: String,
+    },
+    /// Remove a reaction from a message
+    Remove {
+        /// Channel ID or name (e.g., C1234ABCD, #general, or general)
+        channel: String,
+
+        /// Message timestamp (e.g., 1234567890.123456)
+        message_ts: String,
+
+        /// Emoji name (without colons, e.g., thumbsup, heart, rocket)
+        emoji: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ChatCommands {
+    /// Post a message to a channel
+    Post {
+        /// Channel ID or name (e.g., C1234ABCD, #general, or general)
+        channel: String,
+
+        /// Message text (use - to read from stdin)
+        text: String,
+
+        /// Thread timestamp to reply to (makes this a thread reply)
+        #[arg(long)]
+        thread_ts: Option<String>,
     },
 }
 

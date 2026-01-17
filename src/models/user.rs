@@ -35,3 +35,10 @@ pub struct UserInfoResponse {
     pub user: User,
     pub error: Option<String>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct UserProfileResponse {
+    pub ok: bool,
+    pub profile: UserProfile,
+    pub error: Option<String>,
+}

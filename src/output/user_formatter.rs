@@ -1,4 +1,4 @@
-use crate::models::user::User;
+use crate::models::user::{User, UserProfile};
 use crate::output::color::ColorWriter;
 use std::io::Result;
 use termcolor::Color;
@@ -95,6 +95,36 @@ pub fn format_users_list(users: &[User], writer: &mut ColorWriter) -> Result<()>
         if i < users.len() - 1 {
             writer.writeln()?;
         }
+    }
+
+    Ok(())
+}
+
+pub fn format_profile(profile: &UserProfile, writer: &mut ColorWriter) -> Result<()> {
+    writer.print_header("User Profile")?;
+    writer.print_separator()?;
+
+    // Display name
+    if let Some(display_name) = &profile.display_name {
+        if !display_name.is_empty() {
+            writer.print_field("Display Name", display_name)?;
+        }
+    }
+
+    // Email
+    if let Some(email) = &profile.email {
+        writer.print_field("Email", email)?;
+    }
+
+    // Status
+    if let Some(status_emoji) = &profile.status_emoji {
+        let status_text = profile.status_text.as_deref().unwrap_or("");
+        writer.print_field("Status", &format!("{} {}", status_emoji, status_text))?;
+    }
+
+    // Profile image
+    if let Some(image) = &profile.image_72 {
+        writer.print_field("Profile Image", image)?;
     }
 
     Ok(())

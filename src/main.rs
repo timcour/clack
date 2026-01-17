@@ -6,7 +6,10 @@ mod output;
 
 use anyhow::Result;
 use clap::Parser;
-use cli::{AuthType, Cli, Commands, ConversationsCommands, SearchType, UsersCommands};
+use cli::{
+    AuthType, ChatCommands, Cli, Commands, ConversationsCommands, FilesCommands, PinsCommands,
+    ProfileCommands, ReactionsCommands, SearchType, UsersCommands,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -48,6 +51,20 @@ async fn main() -> Result<()> {
                     }
                 }
             }
+            UsersCommands::Profile { command } => match command {
+                ProfileCommands::Get { user_id } => {
+                    let profile = api::users::get_profile(&client, user_id.as_deref()).await?;
+
+                    match cli.format.as_str() {
+                        "json" => println!("{}", serde_json::to_string_pretty(&profile)?),
+                        "yaml" => println!("{}", serde_yaml::to_string(&profile)?),
+                        _ => {
+                            let mut writer = output::color::ColorWriter::new(cli.no_color);
+                            output::user_formatter::format_profile(&profile, &mut writer)?;
+                        }
+                    }
+                }
+            },
         },
         Commands::Conversations { command } => match command {
             ConversationsCommands::List { include_archived, limit } => {
@@ -162,6 +179,29 @@ async fn main() -> Result<()> {
                     }
                 }
             }
+            ConversationsCommands::Members { channel, limit } => {
+                // Resolve channel name to ID if needed
+                let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
+
+                let member_ids = api::channels::get_members(&client, &channel_id, limit).await?;
+
+                // Fetch user details for each member
+                let mut users = Vec::new();
+                for user_id in &member_ids {
+                    if let Ok(user) = api::users::get_user(&client, user_id).await {
+                        users.push(user);
+                    }
+                }
+
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&users)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&users)?),
+                    _ => {
+                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                        output::user_formatter::format_users_list(&users, &mut writer)?;
+                    }
+                }
+            }
         },
         Commands::Search { search_type } => match search_type {
             SearchType::Messages {
@@ -247,6 +287,104 @@ async fn main() -> Result<()> {
                     "yaml" => println!("{}", serde_yaml::to_string(&channels)?),
                     _ => output::search_formatter::format_channel_search_results(&query, &channels, cli.no_color)?,
                 }
+            }
+        },
+        Commands::Files { command } => match command {
+            FilesCommands::List { limit, user, channel } => {
+                let files = api::files::list_files(&client, limit, user.as_deref(), channel.as_deref()).await?;
+
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&files)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&files)?),
+                    _ => {
+                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                        output::file_formatter::format_files_list(&files, &mut writer)?;
+                    }
+                }
+            }
+            FilesCommands::Info { file_id } => {
+                let file = api::files::get_file(&client, &file_id).await?;
+
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&file)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&file)?),
+                    _ => {
+                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                        output::file_formatter::format_file(&file, &mut writer)?;
+                    }
+                }
+            }
+        },
+        Commands::Pins { command } => match command {
+            PinsCommands::List { channel } => {
+                // Resolve channel name to ID if needed
+                let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
+
+                let pins = api::pins::list_pins(&client, &channel_id).await?;
+
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&pins)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&pins)?),
+                    _ => {
+                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                        output::pin_formatter::format_pins_list(&pins, &mut writer)?;
+                    }
+                }
+            }
+            PinsCommands::Add { channel, message_ts } => {
+                // Resolve channel name to ID if needed
+                let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
+
+                api::pins::add_pin(&client, &channel_id, &message_ts).await?;
+
+                println!("✓ Message pinned successfully");
+            }
+            PinsCommands::Remove { channel, message_ts } => {
+                // Resolve channel name to ID if needed
+                let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
+
+                api::pins::remove_pin(&client, &channel_id, &message_ts).await?;
+
+                println!("✓ Message unpinned successfully");
+            }
+        },
+        Commands::Reactions { command } => match command {
+            ReactionsCommands::Add { channel, message_ts, emoji } => {
+                // Resolve channel name to ID if needed
+                let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
+
+                api::reactions::add_reaction(&client, &channel_id, &message_ts, &emoji).await?;
+
+                println!("✓ Reaction :{}: added successfully", emoji);
+            }
+            ReactionsCommands::Remove { channel, message_ts, emoji } => {
+                // Resolve channel name to ID if needed
+                let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
+
+                api::reactions::remove_reaction(&client, &channel_id, &message_ts, &emoji).await?;
+
+                println!("✓ Reaction :{}: removed successfully", emoji);
+            }
+        },
+        Commands::Chat { command } => match command {
+            ChatCommands::Post { channel, text, thread_ts } => {
+                // Resolve channel name to ID if needed
+                let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
+
+                // Handle reading from stdin if text is "-"
+                let message_text = if text == "-" {
+                    use std::io::Read;
+                    let mut buffer = String::new();
+                    std::io::stdin().read_to_string(&mut buffer)?;
+                    buffer
+                } else {
+                    text.clone()
+                };
+
+                let ts = api::chat::post_message(&client, &channel_id, &message_text, thread_ts.as_deref()).await?;
+
+                println!("✓ Message posted successfully");
+                println!("Message timestamp: {}", ts);
             }
         },
         Commands::Auth { auth_type } => match auth_type {

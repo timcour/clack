@@ -1,6 +1,10 @@
 pub mod auth;
 pub mod channels;
+pub mod chat;
 pub mod client;
+pub mod files;
 pub mod messages;
+pub mod pins;
+pub mod reactions;
 pub mod search;
 pub mod users;

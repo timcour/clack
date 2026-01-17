@@ -1,7 +1,9 @@
 pub mod auth_formatter;
 pub mod channel_formatter;
 pub mod color;
+pub mod file_formatter;
 pub mod message_formatter;
+pub mod pin_formatter;
 pub mod search_formatter;
 pub mod thread_formatter;
 pub mod user_formatter;
