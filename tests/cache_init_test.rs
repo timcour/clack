@@ -1,5 +1,14 @@
 use clack::cache::db::init_cache_db_at_path;
+use diesel::prelude::*;
+use diesel::sql_types::Text;
+use diesel::sqlite::SqliteConnection;
 use tempfile::tempdir;
+
+#[derive(QueryableByName)]
+struct JournalMode {
+    #[diesel(sql_type = Text)]
+    journal_mode: String,
+}
 
 #[test]
 fn test_cache_db_initialization() {
@@ -14,14 +23,17 @@ fn test_cache_db_initialization() {
     // Verify database file was created
     assert!(db_path.exists(), "Database file was not created at {:?}", db_path);
 
-    // Verify WAL files were created
-    let wal_path = temp_dir.path().join("test_cache.db-wal");
-    let shm_path = temp_dir.path().join("test_cache.db-shm");
-    assert!(wal_path.exists(), "WAL file was not created");
-    assert!(shm_path.exists(), "SHM file was not created");
+    let db_url = format!("sqlite://{}", db_path.display());
+    let mut conn = SqliteConnection::establish(&db_url)
+        .expect("Failed to reconnect to cache database");
+    let mode = diesel::sql_query("PRAGMA journal_mode")
+        .get_result::<JournalMode>(&mut conn)
+        .expect("Failed to read journal_mode")
+        .journal_mode;
+    assert_eq!(mode.to_lowercase(), "wal", "WAL mode not enabled");
 
     println!("✓ Database created at: {:?}", db_path);
-    println!("✓ WAL mode enabled (wal and shm files present)");
+    println!("✓ WAL mode enabled (journal_mode = wal)");
 
     // temp_dir will be automatically cleaned up when it goes out of scope
 }
