@@ -66,10 +66,20 @@ async fn main() -> Result<()> {
                     // Fetch channel info for metadata
                     let channel_info = api::channels::get_channel(&client, &channel_id).await?;
 
-                    // Fetch all users and build a lookup map
-                    let all_users = api::users::list_users(&client, 200, false).await?;
-                    let user_map: std::collections::HashMap<String, models::user::User> =
-                        all_users.into_iter().map(|u| (u.id.clone(), u)).collect();
+                    // Build user lookup map - only fetch users mentioned in messages
+                    let mut user_map: std::collections::HashMap<String, models::user::User> =
+                        std::collections::HashMap::new();
+
+                    for message in &messages {
+                        if let Some(user_id) = &message.user {
+                            if !user_map.contains_key(user_id) {
+                                // Fetch individual user (cache-first)
+                                if let Ok(user) = api::users::get_user(&client, user_id).await {
+                                    user_map.insert(user.id.clone(), user);
+                                }
+                            }
+                        }
+                    }
 
                     let mut writer = output::color::ColorWriter::new(cli.no_color);
                     output::message_formatter::format_messages(
@@ -97,10 +107,20 @@ async fn main() -> Result<()> {
                     // Fetch channel info for metadata
                     let channel_info = api::channels::get_channel(&client, &channel_id).await?;
 
-                    // Fetch all users and build a lookup map
-                    let all_users = api::users::list_users(&client, 200, false).await?;
-                    let user_map: std::collections::HashMap<String, models::user::User> =
-                        all_users.into_iter().map(|u| (u.id.clone(), u)).collect();
+                    // Build user lookup map - only fetch users mentioned in thread
+                    let mut user_map: std::collections::HashMap<String, models::user::User> =
+                        std::collections::HashMap::new();
+
+                    for message in &messages {
+                        if let Some(user_id) = &message.user {
+                            if !user_map.contains_key(user_id) {
+                                // Fetch individual user (cache-first)
+                                if let Ok(user) = api::users::get_user(&client, user_id).await {
+                                    user_map.insert(user.id.clone(), user);
+                                }
+                            }
+                        }
+                    }
 
                     let mut writer = output::color::ColorWriter::new(cli.no_color);
                     output::thread_formatter::format_thread(

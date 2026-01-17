@@ -248,18 +248,28 @@ pub async fn search_channels(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     async fn setup() -> (mockito::ServerGuard, SlackClient) {
+        let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let workspace_id = format!("T{}", test_id);
+
         let mut server = mockito::Server::new_async().await;
         std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
         let mut client = SlackClient::with_base_url(&server.url(), false).await.unwrap();
 
-        // Mock auth.test for workspace initialization
+        // Mock auth.test for workspace initialization with unique workspace ID
+        let auth_body = format!(
+            r#"{{"ok": true, "url": "https://test.slack.com/", "team_id": "{}", "team": "Test Team", "user": "testuser", "user_id": "U123"}}"#,
+            workspace_id
+        );
         let _auth_mock = server
             .mock("GET", "/auth.test")
             .with_status(200)
             .with_header("content-type", "application/json")
-            .with_body(r#"{"ok": true, "url": "https://test.slack.com/", "team_id": "T123", "team": "Test Team", "user": "testuser", "user_id": "U123"}"#)
+            .with_body(auth_body)
             .create();
 
         client.init_workspace().await.unwrap();
