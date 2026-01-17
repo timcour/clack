@@ -1,60 +1,89 @@
 # Clack
-A Slack API CLI tool
+A Slack API CLI tool focused on readable, human-first output with JSON/YAML export.
 
-# Goal
-Provide a simple command line tool for querying the Slack API with
-output that is human readable by default, but support many other
-standard formats for ease of machine parsing.
-
-# Usage
-
-See [CLI.md](./CLI.md) for complete interface documentation and examples.
+## What it does
+- Query Slack for users, channels, messages, files, pins, reactions, and threads.
+- Format output for humans by default, with `--format json` or `--format yaml` for automation.
+- Cache API responses locally to speed up repeated queries.
 
 ## Quick Start
-
 ```bash
 # Set your Slack API token
 export SLACK_TOKEN=xoxb-your-token-here
 
 # List all users
-clack users
+clack users list
 
 # Get a specific user
-clack user U1234ABCD
+clack users info U1234ABCD
 
 # Get messages from a channel
-clack messages C1234ABCD
+clack conversations history C1234ABCD
 
 # Export as JSON or YAML
-clack users --format json
-clack messages general --format yaml
+clack users list --format json
+clack conversations history general --format yaml
 ```
 
-# Interface Design
- - Should follow git cli conventions, e.g.
-     clack <command> [<options>] [<args...>]`.
- - The default should be simple, not verbose. Specifying a --bunch
-   --of --options is not fun for humans.
- - But still allow for less common --options since they _always_ end
-   up being useful.
+See `CLI.md` for the full command reference and examples.
 
-# Thoughts
-## Object modeling
-This codebase should mirror the relationships defined by the Slack
-API, e.g. a user has many messages, a channel has many users and many
-messages, etc.
+## Configuration
+- `SLACK_TOKEN` (required): Slack bot token with appropriate scopes for the endpoints you call.
+- `--refresh-cache`: bypass the cache and query Slack directly.
+- `--debug-response`: print raw HTTP responses for debugging.
+- `--no-color`: disable colorized output.
 
-## Testing
-All public function and CLI interface should have a corresponding unit test. When
-running unit tests, by default, no external API calls should be
-made. Any calls to the Slack API should be mocked. If there is an
-existing "mock library" that would fit this use case well, recommend
-it.
+## Scopes required
+The Slack app needs scopes for the API methods Clack calls. Exact names depend on classic vs granular scopes, but these are the typical minimums:
 
-## Forward Looking
-Caching Slack objects might be useful in the future, so let's plan to
-integrate an ORM backed by a SQLite database at some point.
+| Feature | API methods | Scopes (classic) | Scopes (granular) |
+| --- | --- | --- | --- |
+| Auth bootstrap | `auth.test` | N/A | N/A |
+| Users | `users.list`, `users.info`, `users.profile.get` | `users:read` | `users:read` |
+| Conversations list/info/members | `conversations.list`, `conversations.info`, `conversations.members` | `channels:read`, `groups:read`, `im:read`, `mpim:read` | `conversations:read` |
+| Conversations history/replies | `conversations.history`, `conversations.replies` | `channels:history`, `groups:history`, `im:history`, `mpim:history` | `conversations:history` |
+| Chat post | `chat.postMessage` | `chat:write` | `chat:write` |
+| Reactions | `reactions.add`, `reactions.remove` | `reactions:write` | `reactions:write` |
+| Pins list | `pins.list` | `pins:read` | `pins:read` |
+| Pins add/remove | `pins.add`, `pins.remove` | `pins:write` | `pins:write` |
+| Files | `files.list`, `files.info` | `files:read` | `files:read` |
+| Search | `search.messages`, `search.files`, `search.all` | `search:read` | `search:read` |
 
-# Reference
-## Slack API Docs
-https://docs.slack.dev/reference/methods
+Note: Access to private channels requires the app to be a member of the channel.
+
+## Development
+Prerequisites:
+- Rust stable toolchain.
+- On Linux, OpenSSL headers may be required (e.g. `libssl-dev` and `pkg-config`).
+
+Common tasks:
+```bash
+make build
+make test
+```
+
+Local run:
+```bash
+cargo run -- conversations list
+```
+
+## Project layout
+- `src/api`: Slack API client and endpoint wrappers.
+- `src/cli.rs`: CLI definitions and flags.
+- `src/cache`: SQLite-backed cache layer and migrations.
+- `src/models`: API response/request models.
+- `src/output`: Human-readable formatters.
+- `migrations`: Diesel migrations for the cache DB.
+
+## Caching
+Clack stores cached Slack objects in a SQLite database under the OS cache directory
+(`~/.cache/clack/cache.db` on Linux). WAL mode is enabled for write performance.
+Use `--refresh-cache` to force live API reads.
+
+## CI and releases
+- GitHub Actions runs `make build` and `make test` on every push.
+- Releases on `main` use semantic-release to bump versions and create GitHub Releases.
+- Release assets are built per-platform and attached to the GitHub Release.
+
+## Reference
+- Slack API docs: https://docs.slack.dev/reference/methods
