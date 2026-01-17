@@ -4,18 +4,36 @@ use crate::models::channel::{Channel, ChannelInfoResponse, ChannelsListResponse}
 use anyhow::Result;
 
 /// Resolves a channel identifier to a channel ID.
-/// Accepts channel IDs (C123), names (general), or names with # prefix (#general).
+/// Accepts channel IDs (C123, D123, G123), names (general), or names with # prefix (#general).
 /// Returns the channel ID.
 pub async fn resolve_channel_id(client: &SlackClient, identifier: &str) -> Result<String> {
     // Remove # prefix if present
     let clean_identifier = identifier.strip_prefix('#').unwrap_or(identifier);
 
-    // If it looks like a channel ID (starts with C), return as-is
-    if clean_identifier.starts_with('C') && clean_identifier.len() > 1 {
-        return Ok(clean_identifier.to_string());
+    // Check if it looks like a conversation ID (channels, DMs, groups start with C, D, or G)
+    let looks_like_id = clean_identifier.len() > 1 &&
+        (clean_identifier.starts_with('C') ||
+         clean_identifier.starts_with('D') ||
+         clean_identifier.starts_with('G'));
+
+    if looks_like_id {
+        // Try conversations.info directly - it's faster than listing all channels
+        match get_channel(client, clean_identifier).await {
+            Ok(channel) => {
+                return Ok(channel.id);
+            }
+            Err(e) => {
+                if client.verbose() {
+                    eprintln!("[API] conversations.info failed for '{}': {}", clean_identifier, e);
+                    eprintln!("[API] Falling back to search by name");
+                }
+                // Fall through to name search - maybe it's actually a channel name that starts with C/D/G
+            }
+        }
     }
 
-    // Otherwise, it's a channel name - we need to look it up
+    // Either doesn't look like an ID, or conversations.info failed
+    // Treat as a channel name and search for it
     list_channels_and_find(client, clean_identifier).await
 }
 
@@ -330,8 +348,17 @@ mod tests {
     async fn test_get_channel_success() {
         let (mut server, client) = setup().await;
 
+        // Clear any potential cache pollution for this workspace
+        if let Some(pool) = client.cache_pool() {
+            if let Ok(mut conn) = cache::get_connection(pool).await {
+                let workspace_id = client.workspace_id().unwrap();
+                let _ = cache::operations::clear_workspace_cache(&mut conn, workspace_id, false);
+            }
+        }
+
         let _mock = server
-            .mock("GET", "/conversations.info?channel=C123")
+            .mock("GET", "/conversations.info")
+            .match_query(mockito::Matcher::UrlEncoded("channel".into(), "C123".into()))
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(
@@ -388,9 +415,28 @@ mod tests {
 
     #[tokio::test]
     async fn test_resolve_channel_id_with_id() {
-        let (_server, client) = setup().await;
+        let (mut server, client) = setup().await;
 
-        // Should return the ID as-is if it starts with C
+        // Mock conversations.info for channel ID lookups
+        let _mock1 = server
+            .mock("GET", "/conversations.info")
+            .match_query(mockito::Matcher::UrlEncoded("channel".into(), "C123456".into()))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"ok": true, "channel": {"id": "C123456", "name": "general", "is_channel": true, "is_private": false}}"#)
+            .create_async()
+            .await;
+
+        let _mock2 = server
+            .mock("GET", "/conversations.info")
+            .match_query(mockito::Matcher::UrlEncoded("channel".into(), "C999ABC".into()))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"ok": true, "channel": {"id": "C999ABC", "name": "random", "is_channel": true, "is_private": false}}"#)
+            .create_async()
+            .await;
+
+        // Should call conversations.info and return the ID
         let result = resolve_channel_id(&client, "C123456").await.unwrap();
         assert_eq!(result, "C123456");
 

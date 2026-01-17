@@ -238,6 +238,14 @@ mod tests {
     async fn test_get_user_success() {
         let (mut server, client) = setup().await;
 
+        // Clear any potential cache pollution for this workspace
+        if let Some(pool) = client.cache_pool() {
+            if let Ok(mut conn) = cache::get_connection(pool).await {
+                let workspace_id = client.workspace_id().unwrap();
+                let _ = cache::operations::clear_workspace_cache(&mut conn, workspace_id, false);
+            }
+        }
+
         let _mock = server
             .mock("GET", "/users.info?user=U123")
             .with_status(200)

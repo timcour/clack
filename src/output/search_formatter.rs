@@ -53,10 +53,10 @@ pub fn format_search_messages(response: &SearchMessagesResponse, no_color: bool)
             let mut channel_spec = ColorSpec::new();
             channel_spec.set_fg(Some(Color::Yellow));
             stdout.set_color(&channel_spec)?;
-            if let Some(ref name) = channel.name {
+            if let Some(name) = channel.name() {
                 write!(stdout, " #{}", name)?;
             } else {
-                write!(stdout, " {}", channel.id)?;
+                write!(stdout, " {}", channel.id())?;
             }
             stdout.reset()?;
         }
@@ -173,10 +173,10 @@ pub fn format_search_all(response: &SearchAllResponse, no_color: bool) -> std::i
                 let mut channel_spec = ColorSpec::new();
                 channel_spec.set_fg(Some(Color::Yellow));
                 stdout.set_color(&channel_spec)?;
-                if let Some(ref name) = channel.name {
+                if let Some(name) = channel.name() {
                     write!(stdout, " #{}", name)?;
                 } else {
-                    write!(stdout, " {}", channel.id)?;
+                    write!(stdout, " {}", channel.id())?;
                 }
                 stdout.reset()?;
             }
