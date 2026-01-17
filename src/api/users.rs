@@ -118,7 +118,7 @@ mod tests {
 
         let mut server = mockito::Server::new_async().await;
         std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
-        let mut client = SlackClient::with_base_url(&server.url(), false).await.unwrap();
+        let mut client = SlackClient::with_base_url(&server.url(), false, false).await.unwrap();
 
         // Mock auth.test for workspace initialization with unique workspace ID
         let auth_body = format!(

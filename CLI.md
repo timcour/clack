@@ -198,6 +198,7 @@ These options work with any command:
 - `--version`, `-V` - Display version information
 - `--no-color` - Disable colorized output
 - `--verbose`, `-v` - Enable verbose API logging (shows request URLs, parameters, response status, duration, and size)
+- `--debug-response` - Show raw HTTP response bodies for debugging API response parsing issues
 - `--format <format>` - Output format: `human` (default), `json`, `yaml`
 
 ### Verbose Mode
@@ -220,6 +221,29 @@ This is useful for:
 - Understanding which API calls are being made
 - Monitoring rate limits and performance
 - Troubleshooting authentication or scope problems
+
+### Debug Response Mode
+
+When `--debug-response` is enabled, the raw HTTP response body from each API call will be printed to stderr. This is extremely useful when:
+- Troubleshooting deserialization errors
+- Understanding the exact structure of API responses
+- Debugging unexpected data formats
+- Reporting bugs or issues with API response parsing
+
+**Example:**
+```bash
+# Show raw response to debug parsing errors
+clack conversations history C123456 --debug-response
+```
+
+The output will show:
+```
+═══════════════════════════════════════════════════════════════
+DEBUG: Response body from conversations.history:
+═══════════════════════════════════════════════════════════════
+{"ok":true,"messages":[...],"has_more":false}
+═══════════════════════════════════════════════════════════════
+```
 
 **Example:**
 ```bash

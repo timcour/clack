@@ -19,6 +19,10 @@ pub struct Cli {
     /// Enable verbose logging
     #[arg(short, long, global = true)]
     pub verbose: bool,
+
+    /// Show raw HTTP response bodies for debugging
+    #[arg(long, global = true)]
+    pub debug_response: bool,
 }
 
 #[derive(Subcommand)]

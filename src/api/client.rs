@@ -17,16 +17,21 @@ pub struct SlackClient {
     client: reqwest::Client,
     base_url: String,
     verbose: bool,
+    debug_response: bool,
     workspace_id: Option<String>,
     cache_pool: Option<CachePool>,
 }
 
 impl SlackClient {
     pub async fn new_verbose(verbose: bool) -> Result<Self> {
-        Self::with_base_url("https://slack.com/api", verbose).await
+        Self::with_base_url("https://slack.com/api", verbose, false).await
     }
 
-    pub async fn with_base_url(base_url: &str, verbose: bool) -> Result<Self> {
+    pub async fn new(verbose: bool, debug_response: bool) -> Result<Self> {
+        Self::with_base_url("https://slack.com/api", verbose, debug_response).await
+    }
+
+    pub async fn with_base_url(base_url: &str, verbose: bool, debug_response: bool) -> Result<Self> {
         let token = env::var("SLACK_TOKEN").context(
             "SLACK_TOKEN environment variable not set\n\n\
              Please set your Slack API token:\n  \
@@ -60,6 +65,7 @@ impl SlackClient {
             client,
             base_url: base_url.to_string(),
             verbose,
+            debug_response,
             workspace_id: None,
             cache_pool,
         })
@@ -150,6 +156,15 @@ impl SlackClient {
             // Log response if verbose
             if self.verbose {
                 eprintln!("← {} ({}ms, {} bytes)", status.as_u16(), duration.as_millis(), body_size);
+            }
+
+            // Debug response body if requested
+            if self.debug_response {
+                eprintln!("\n═══════════════════════════════════════════════════════════════");
+                eprintln!("DEBUG: Response body from {}:", endpoint);
+                eprintln!("═══════════════════════════════════════════════════════════════");
+                eprintln!("{}", body);
+                eprintln!("═══════════════════════════════════════════════════════════════\n");
             }
 
             // First, check if this is an error response
