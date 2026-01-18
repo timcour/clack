@@ -297,8 +297,20 @@ async fn main() -> Result<()> {
                     "json" => println!("{}", serde_json::to_string_pretty(&files)?),
                     "yaml" => println!("{}", serde_yaml::to_string(&files)?),
                     _ => {
+                        // Build user lookup map
+                        let mut user_map: std::collections::HashMap<String, models::user::User> =
+                            std::collections::HashMap::new();
+
+                        for file in &files {
+                            if !user_map.contains_key(&file.user) {
+                                if let Ok(user) = api::users::get_user(&client, &file.user).await {
+                                    user_map.insert(user.id.clone(), user);
+                                }
+                            }
+                        }
+
                         let mut writer = output::color::ColorWriter::new(cli.no_color);
-                        output::file_formatter::format_files_list(&files, &mut writer)?;
+                        output::file_formatter::format_files_list(&files, &user_map, &mut writer)?;
                     }
                 }
             }
@@ -309,8 +321,16 @@ async fn main() -> Result<()> {
                     "json" => println!("{}", serde_json::to_string_pretty(&file)?),
                     "yaml" => println!("{}", serde_yaml::to_string(&file)?),
                     _ => {
+                        // Build user lookup map for the single file uploader
+                        let mut user_map: std::collections::HashMap<String, models::user::User> =
+                            std::collections::HashMap::new();
+
+                        if let Ok(user) = api::users::get_user(&client, &file.user).await {
+                            user_map.insert(user.id.clone(), user);
+                        }
+
                         let mut writer = output::color::ColorWriter::new(cli.no_color);
-                        output::file_formatter::format_file(&file, &mut writer)?;
+                        output::file_formatter::format_file(&file, &user_map, &mut writer)?;
                     }
                 }
             }

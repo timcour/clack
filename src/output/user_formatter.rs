@@ -8,7 +8,7 @@ pub fn format_user(user: &User, writer: &mut ColorWriter) -> Result<()> {
     writer.print_separator()?;
 
     // Basic info
-    writer.print_field("User ID", &user.id)?;
+    writer.print_field("User ID", &format!("@{} ({})", user.name, user.id))?;
 
     if let Some(real_name) = &user.real_name {
         writer.print_field("Real Name", real_name)?;
@@ -66,10 +66,11 @@ pub fn format_users_list(users: &[User], writer: &mut ColorWriter) -> Result<()>
     writer.print_separator()?;
 
     for (i, user) in users.iter().enumerate() {
-        // ID and name
-        writer.print_colored(&user.id, Color::Yellow)?;
-        writer.write(" ")?;
+        // Name in bold with @ prefix, then ID in parentheses
+        writer.write("@")?;
         writer.print_bold(&user.name)?;
+        writer.write(" ")?;
+        writer.print_colored(&format!("({})", user.id), Color::Yellow)?;
 
         // Real name in parentheses
         if let Some(real_name) = &user.real_name {
