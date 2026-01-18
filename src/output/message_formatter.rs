@@ -330,7 +330,7 @@ mod tests {
         let channel = create_test_channel();
         let users = HashMap::new();
 
-        // Test with a known timestamp: 2024-01-01 00:00:00 UTC
+        // Test with a known timestamp: 2026-01-01 00:00:00 UTC
         let message = create_test_message("1704067200.000000", None, "New Year!");
 
         let mut writer = ColorWriter::new(true);

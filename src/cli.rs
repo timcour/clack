@@ -565,7 +565,7 @@ mod tests {
             "--channel",
             "engineering",
             "--after",
-            "2024-01-01",
+            "2026-01-01",
             "--before",
             "2024-12-31",
             "--limit",
@@ -584,7 +584,7 @@ mod tests {
                     assert_eq!(query, "deploy");
                     assert_eq!(from, Some("alice".to_string()));
                     assert_eq!(channel, Some("engineering".to_string()));
-                    assert_eq!(after, Some("2024-01-01".to_string()));
+                    assert_eq!(after, Some("2026-01-01".to_string()));
                     assert_eq!(before, Some("2024-12-31".to_string()));
                     assert_eq!(limit, 50);
                 }

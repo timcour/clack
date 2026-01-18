@@ -436,7 +436,7 @@ clack search messages "approved" --from alice
 clack search messages "standup notes" --channel engineering
 
 # Search with date range
-clack search messages "budget" --after 2024-01-01 --before 2024-12-31
+clack search messages "budget" --after 2026-01-01 --before 2024-12-31
 
 # Combine multiple filters
 clack search messages "release" --from bob --channel releases --after 2024-06-01
@@ -475,7 +475,7 @@ clack search files "presentation" --from alice
 clack search files "diagram" --channel engineering
 
 # Search with date range
-clack search files "report" --after 2024-01-01
+clack search files "report" --after 2026-01-01
 
 # Combine filters
 clack search files "*.xlsx" --from bob --channel finance --after 2024-06-01
@@ -553,12 +553,12 @@ clack search channels team --format json
 The search commands use Slack's search modifier syntax. Filters are automatically combined with your query:
 - `--from alice` becomes `from:alice` in the search query
 - `--channel engineering` becomes `in:engineering`
-- `--after 2024-01-01` becomes `after:2024-01-01`
+- `--after 2026-01-01` becomes `after:2026-01-01`
 - `--before 2024-12-31` becomes `before:2024-12-31`
 
 You can also use Slack's native search modifiers directly in your query string:
 ```bash
-clack search messages "deploy from:alice in:engineering after:2024-01-01"
+clack search messages "deploy from:alice in:engineering after:2026-01-01"
 ```
 
 **Required Scopes:**

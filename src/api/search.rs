@@ -124,8 +124,8 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_dates() {
-        let query = build_search_query("hello", None, None, Some("2024-01-01"), Some("2024-12-31"));
-        assert_eq!(query, "hello after:2024-01-01 before:2024-12-31");
+        let query = build_search_query("hello", None, None, Some("2026-01-01"), Some("2024-12-31"));
+        assert_eq!(query, "hello after:2026-01-01 before:2024-12-31");
     }
 
     #[test]
@@ -134,12 +134,12 @@ mod tests {
             "deploy",
             Some("bob"),
             Some("engineering"),
-            Some("2024-01-01"),
+            Some("2026-01-01"),
             Some("2024-12-31"),
         );
         assert_eq!(
             query,
-            "deploy from:bob in:engineering after:2024-01-01 before:2024-12-31"
+            "deploy from:bob in:engineering after:2026-01-01 before:2024-12-31"
         );
     }
 

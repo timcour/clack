@@ -281,7 +281,7 @@ Options:
 clack search messages "deploy"
 
 # Search for messages from a specific user in a channel
-clack search messages "production incident" --from alice --channel engineering --after 2024-01-01
+clack search messages "production incident" --from alice --channel engineering --after 2026-01-01
 ```
 
 ---
@@ -314,7 +314,7 @@ Options:
 clack search files "*.pdf"
 
 # Search for files uploaded by a user in a specific timeframe
-clack search files "presentation" --from bob --channel marketing --after 2024-01-01 --before 2024-01-31
+clack search files "presentation" --from bob --channel marketing --after 2026-01-01 --before 2026-01-31
 ```
 
 ---
