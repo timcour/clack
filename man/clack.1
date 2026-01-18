@@ -1,0 +1,99 @@
+.TH CLACK 1 "2024-01-01" "clack" "User Commands"
+.SH NAME
+clack \- Slack API CLI tool
+.SH SYNOPSIS
+.B clack
+[\fIglobal options\fR]
+\fIcommand\fR
+[\fIcommand options\fR]
+.SH DESCRIPTION
+Clack is a Slack API CLI tool that focuses on readable, human-first output
+while still supporting JSON and YAML for automation. It can query users,
+channels, messages, files, pins, reactions, and search endpoints, and it
+maintains a local SQLite cache to speed up repeated queries.
+.SH COMMANDS
+.TP
+.B users
+List users or fetch user details and profiles.
+.TP
+.B conversations
+List channels, inspect channel info, fetch history, replies, or members.
+.TP
+.B files
+List files or fetch file details.
+.TP
+.B pins
+List, add, or remove pins.
+.TP
+.B reactions
+Add or remove reactions.
+.TP
+.B chat
+Post messages.
+.TP
+.B search
+Search messages, files, or both.
+.TP
+.B auth
+Run authentication checks.
+.SH OPTIONS
+.TP
+.B \-\-no-color
+Disable colorized output.
+.TP
+.B \-\-format \fIhuman|json|yaml\fR
+Select output format (default: human).
+.TP
+.B \-v, \-\-verbose
+Enable verbose logging.
+.TP
+.B \-\-debug-response
+Print raw HTTP responses for debugging.
+.TP
+.B \-\-refresh-cache
+Bypass the local cache and query Slack directly.
+.SH ENVIRONMENT
+.TP
+.B SLACK_TOKEN
+Slack bot token with appropriate scopes for the endpoints you use.
+.SH FILES
+.TP
+.I ~/.cache/clack/cache.db
+Default cache database on Linux. Other platforms use the OS cache directory
+(\fBdirs::cache_dir\fR), such as \fI~/Library/Caches/clack/cache.db\fR on macOS.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B >0
+An error occurred.
+.SH EXAMPLES
+.TP
+Basic usage:
+.RS
+.nf
+clack users list
+clack users info U1234ABCD
+clack conversations history #general --limit 20
+.fi
+.RE
+.TP
+Most recent 5 root (non-reply) messages in a channel:
+.RS
+.nf
+clack conversations history #general --limit 50 --format json \\
+  | jq 'map(select(.thread_ts == null or .thread_ts == .ts)) | .[0:5]'
+.fi
+.RE
+.TP
+Count messages for a user in the last 24 hours:
+.RS
+.nf
+SINCE=$(date -u -d '24 hours ago' +%Y-%m-%d 2>/dev/null || date -u -v-1d +%Y-%m-%d)
+clack search messages "in:#general" --from @alice --after "$SINCE" --format json \\
+  | jq '.messages.matches | length'
+.fi
+.RE
+.SH SEE ALSO
+\fICLI.md\fR

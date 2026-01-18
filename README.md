@@ -62,6 +62,16 @@ make build
 make test
 ```
 
+Install (macOS):
+```bash
+sudo make install
+```
+
+Uninstall:
+```bash
+sudo make uninstall
+```
+
 Local run:
 ```bash
 cargo run -- conversations list
