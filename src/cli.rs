@@ -16,6 +16,10 @@ pub struct Cli {
     #[arg(long, global = true, default_value = "human")]
     pub format: String,
 
+    /// Disable pager for scrollable output
+    #[arg(long, global = true)]
+    pub no_pager: bool,
+
     /// Enable verbose logging
     #[arg(short, long, global = true)]
     pub verbose: bool,

@@ -60,13 +60,12 @@ async fn main() -> Result<()> {
                 ProfileCommands::Get { user_id } => {
                     let profile = api::users::get_profile(&client, user_id.as_deref()).await?;
 
-                    final_output = match cli.format.as_str() {
-                        "json" => serde_json::to_string_pretty(&profile)?,
-                        "yaml" => serde_yaml::to_string(&profile)?,
+                    match cli.format.as_str() {
+                        "json" => println!("{}", serde_json::to_string_pretty(&profile)?),
+                        "yaml" => println!("{}", serde_yaml::to_string(&profile)?),
                         _ => {
                             let mut writer = output::color::ColorWriter::new(cli.no_color);
                             output::user_formatter::format_profile(&profile, &mut writer)?;
-                            writer.into_string()?
                         }
                     }
                 }
@@ -76,13 +75,12 @@ async fn main() -> Result<()> {
             ConversationsCommands::List { include_archived, limit } => {
                 let channels = api::channels::list_channels(&client, include_archived, limit).await?;
 
-                final_output = match cli.format.as_str() {
-                    "json" => serde_json::to_string_pretty(&channels)?,
-                    "yaml" => serde_yaml::to_string(&channels)?,
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&channels)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&channels)?),
                     _ => {
                         let mut writer = output::color::ColorWriter::new(cli.no_color);
                         output::channel_formatter::format_channels_list(&channels, &mut writer)?;
-                        writer.into_string()?
                     }
                 }
             }
@@ -91,14 +89,13 @@ async fn main() -> Result<()> {
                 let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
                 let channel_info = api::channels::get_channel(&client, &channel_id).await?;
 
-                final_output = match cli.format.as_str() {
-                    "json" => serde_json::to_string_pretty(&channel_info)?,
-                    "yaml" => serde_yaml::to_string(&channel_info)?,
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&channel_info)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&channel_info)?),
                     _ => {
                         let mut writer = output::color::ColorWriter::new(cli.no_color);
                         // Reuse format_channels_list with a single-element vector
                         output::channel_formatter::format_channels_list(&vec![channel_info], &mut writer)?;
-                        writer.into_string()?
                     }
                 }
             }
@@ -114,9 +111,9 @@ async fn main() -> Result<()> {
                 let messages =
                     api::messages::list_messages(&client, &channel_id, limit, latest, oldest).await?;
 
-                final_output = match cli.format.as_str() {
-                    "json" => serde_json::to_string_pretty(&messages)?,
-                    "yaml" => serde_yaml::to_string(&messages)?,
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&messages)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&messages)?),
                     _ => {
                         // Fetch channel info for metadata
                         let channel_info = api::channels::get_channel(&client, &channel_id).await?;
@@ -136,44 +133,15 @@ async fn main() -> Result<()> {
                             }
                         }
 
-                        // Build thread metadata map
-                        let mut thread_info: std::collections::HashMap<String, (usize, Vec<String>)> =
-                            std::collections::HashMap::new();
-
-                        // Identify unique threads
-                        let thread_timestamps: std::collections::HashSet<&String> = messages
-                            .iter()
-                            .filter_map(|m| m.thread_ts.as_ref())
-                            .collect();
-
-                        // Fetch metadata for each thread
-                        for thread_ts in thread_timestamps {
-                            if let Ok(thread_messages) = api::messages::get_thread(&client, &channel_id, thread_ts).await {
-                                let (reply_count, participant_ids) = api::messages::get_thread_metadata(&thread_messages);
-                                thread_info.insert(thread_ts.clone(), (reply_count, participant_ids.clone()));
-
-                                // Also add participants to user_map
-                                for user_id in &participant_ids {
-                                    if !user_map.contains_key(user_id) {
-                                        if let Ok(user) = api::users::get_user(&client, user_id).await {
-                                            user_map.insert(user.id.clone(), user);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
                         let mut writer = output::color::ColorWriter::new(cli.no_color);
-                        output::message_formatter::format_messages_with_thread_info(
+                        output::message_formatter::format_messages(
                             &messages,
                             &channel_info,
                             &user_map,
-                            &thread_info,
                             &mut writer,
                         )?;
-                        writer.into_string()?
                     }
-                };
+                }
             }
             ConversationsCommands::Replies {
                 channel,
@@ -184,9 +152,9 @@ async fn main() -> Result<()> {
 
                 let messages = api::messages::get_thread(&client, &channel_id, &message_ts).await?;
 
-                final_output = match cli.format.as_str() {
-                    "json" => serde_json::to_string_pretty(&messages)?,
-                    "yaml" => serde_yaml::to_string(&messages)?,
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&messages)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&messages)?),
                     _ => {
                         // Fetch channel info for metadata
                         let channel_info = api::channels::get_channel(&client, &channel_id).await?;
@@ -213,9 +181,8 @@ async fn main() -> Result<()> {
                             &user_map,
                             &mut writer,
                         )?;
-                        writer.into_string()?
                     }
-                };
+                }
             }
             ConversationsCommands::Members { channel, limit } => {
                 // Resolve channel name to ID if needed
@@ -231,13 +198,12 @@ async fn main() -> Result<()> {
                     }
                 }
 
-                final_output = match cli.format.as_str() {
-                    "json" => serde_json::to_string_pretty(&users)?,
-                    "yaml" => serde_yaml::to_string(&users)?,
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&users)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&users)?),
                     _ => {
                         let mut writer = output::color::ColorWriter::new(cli.no_color);
                         output::user_formatter::format_users_list(&users, &mut writer)?;
-                        writer.into_string()?
                     }
                 }
             }
@@ -263,13 +229,9 @@ async fn main() -> Result<()> {
                 let response = api::search::search_messages(&client, &search_query, Some(limit)).await?;
 
                 match cli.format.as_str() {
-                    "json" => final_output = serde_json::to_string_pretty(&response)?,
-                    "yaml" => final_output = serde_yaml::to_string(&response)?,
-                    _ => {
-                        // TODO: Phase 5 will refactor search formatters to use ColorWriter
-                        output::search_formatter::format_search_messages(&response, cli.no_color)?;
-                        final_output = String::new(); // Skip pager for search (writes directly)
-                    }
+                    "json" => println!("{}", serde_json::to_string_pretty(&response)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&response)?),
+                    _ => output::search_formatter::format_search_messages(&response, cli.no_color)?,
                 }
             }
             SearchType::Files {
@@ -292,13 +254,9 @@ async fn main() -> Result<()> {
                 let response = api::search::search_files(&client, &search_query, Some(limit)).await?;
 
                 match cli.format.as_str() {
-                    "json" => final_output = serde_json::to_string_pretty(&response)?,
-                    "yaml" => final_output = serde_yaml::to_string(&response)?,
-                    _ => {
-                        // TODO: Phase 5 will refactor search formatters to use ColorWriter
-                        output::search_formatter::format_search_files(&response, cli.no_color)?;
-                        final_output = String::new(); // Skip pager for search (writes directly)
-                    }
+                    "json" => println!("{}", serde_json::to_string_pretty(&response)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&response)?),
+                    _ => output::search_formatter::format_search_files(&response, cli.no_color)?,
                 }
             }
             SearchType::All {
@@ -318,13 +276,9 @@ async fn main() -> Result<()> {
                 let response = api::search::search_all(&client, &search_query, Some(limit)).await?;
 
                 match cli.format.as_str() {
-                    "json" => final_output = serde_json::to_string_pretty(&response)?,
-                    "yaml" => final_output = serde_yaml::to_string(&response)?,
-                    _ => {
-                        // TODO: Phase 5 will refactor search formatters to use ColorWriter
-                        output::search_formatter::format_search_all(&response, cli.no_color)?;
-                        final_output = String::new(); // Skip pager for search (writes directly)
-                    }
+                    "json" => println!("{}", serde_json::to_string_pretty(&response)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&response)?),
+                    _ => output::search_formatter::format_search_all(&response, cli.no_color)?,
                 }
             }
             SearchType::Channels {
@@ -334,13 +288,9 @@ async fn main() -> Result<()> {
                 let channels = api::channels::search_channels(&client, &query, include_archived).await?;
 
                 match cli.format.as_str() {
-                    "json" => final_output = serde_json::to_string_pretty(&channels)?,
-                    "yaml" => final_output = serde_yaml::to_string(&channels)?,
-                    _ => {
-                        // TODO: Phase 5 will refactor search formatters to use ColorWriter
-                        output::search_formatter::format_channel_search_results(&query, &channels, cli.no_color)?;
-                        final_output = String::new(); // Skip pager for search (writes directly)
-                    }
+                    "json" => println!("{}", serde_json::to_string_pretty(&channels)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&channels)?),
+                    _ => output::search_formatter::format_channel_search_results(&query, &channels, cli.no_color)?,
                 }
             }
         },
@@ -348,9 +298,9 @@ async fn main() -> Result<()> {
             FilesCommands::List { limit, user, channel } => {
                 let files = api::files::list_files(&client, limit, user.as_deref(), channel.as_deref()).await?;
 
-                final_output = match cli.format.as_str() {
-                    "json" => serde_json::to_string_pretty(&files)?,
-                    "yaml" => serde_yaml::to_string(&files)?,
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&files)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&files)?),
                     _ => {
                         // Build user lookup map
                         let mut user_map: std::collections::HashMap<String, models::user::User> =
@@ -366,16 +316,15 @@ async fn main() -> Result<()> {
 
                         let mut writer = output::color::ColorWriter::new(cli.no_color);
                         output::file_formatter::format_files_list(&files, &user_map, &mut writer)?;
-                        writer.into_string()?
                     }
                 }
             }
             FilesCommands::Info { file_id } => {
                 let file = api::files::get_file(&client, &file_id).await?;
 
-                final_output = match cli.format.as_str() {
-                    "json" => serde_json::to_string_pretty(&file)?,
-                    "yaml" => serde_yaml::to_string(&file)?,
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&file)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&file)?),
                     _ => {
                         // Build user lookup map for the single file uploader
                         let mut user_map: std::collections::HashMap<String, models::user::User> =
@@ -387,7 +336,6 @@ async fn main() -> Result<()> {
 
                         let mut writer = output::color::ColorWriter::new(cli.no_color);
                         output::file_formatter::format_file(&file, &user_map, &mut writer)?;
-                        writer.into_string()?
                     }
                 }
             }
@@ -399,13 +347,12 @@ async fn main() -> Result<()> {
 
                 let pins = api::pins::list_pins(&client, &channel_id).await?;
 
-                final_output = match cli.format.as_str() {
-                    "json" => serde_json::to_string_pretty(&pins)?,
-                    "yaml" => serde_yaml::to_string(&pins)?,
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&pins)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&pins)?),
                     _ => {
                         let mut writer = output::color::ColorWriter::new(cli.no_color);
                         output::pin_formatter::format_pins_list(&pins, &mut writer)?;
-                        writer.into_string()?
                     }
                 }
             }
@@ -469,24 +416,16 @@ async fn main() -> Result<()> {
             AuthType::Test => {
                 let auth_response = api::auth::test_auth(&client).await?;
 
-                final_output = match cli.format.as_str() {
-                    "json" => serde_json::to_string_pretty(&auth_response)?,
-                    "yaml" => serde_yaml::to_string(&auth_response)?,
+                match cli.format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&auth_response)?),
+                    "yaml" => println!("{}", serde_yaml::to_string(&auth_response)?),
                     _ => {
                         let mut writer = output::color::ColorWriter::new(cli.no_color);
                         output::auth_formatter::format_auth_test(&auth_response, &mut writer)?;
-                        writer.into_string()?
                     }
                 }
             }
         },
-    }
-
-    // Output with pager if enabled
-    if !final_output.is_empty() {
-        let mut output_dest = output::pager::OutputDestination::new(cli.no_pager)?;
-        output_dest.write_str(&final_output)?;
-        output_dest.finish()?;
     }
 
     Ok(())

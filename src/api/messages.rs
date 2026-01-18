@@ -89,6 +89,25 @@ pub async fn get_thread(
     Ok(messages)
 }
 
+/// Extract thread metadata from messages
+/// Returns (reply_count, participant_ids)
+pub fn get_thread_metadata(messages: &[Message]) -> (usize, Vec<String>) {
+    use std::collections::HashSet;
+
+    let reply_count = messages.len().saturating_sub(1); // Exclude root message
+
+    // Collect unique user IDs
+    let mut participants = HashSet::new();
+    for msg in messages {
+        if let Some(user_id) = &msg.user {
+            participants.insert(user_id.clone());
+        }
+    }
+
+    let participant_ids: Vec<String> = participants.into_iter().collect();
+    (reply_count, participant_ids)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
