@@ -266,9 +266,23 @@ async fn main() -> Result<()> {
                     "json" => final_output = serde_json::to_string_pretty(&response)?,
                     "yaml" => final_output = serde_yaml::to_string(&response)?,
                     _ => {
-                        // TODO: Phase 5 will refactor search formatters to use ColorWriter
-                        output::search_formatter::format_search_messages(&response, cli.no_color)?;
-                        final_output = String::new(); // Skip pager for search (writes directly)
+                        // Build user lookup map from search results
+                        let mut user_map: std::collections::HashMap<String, models::user::User> =
+                            std::collections::HashMap::new();
+
+                        for message in &response.messages.matches {
+                            if let Some(user_id) = &message.user {
+                                if !user_map.contains_key(user_id) {
+                                    if let Ok(user) = api::users::get_user(&client, user_id).await {
+                                        user_map.insert(user.id.clone(), user);
+                                    }
+                                }
+                            }
+                        }
+
+                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                        output::search_formatter::format_search_messages(&response, &user_map, &mut writer)?;
+                        final_output = writer.into_string()?;
                     }
                 }
             }
@@ -295,9 +309,9 @@ async fn main() -> Result<()> {
                     "json" => final_output = serde_json::to_string_pretty(&response)?,
                     "yaml" => final_output = serde_yaml::to_string(&response)?,
                     _ => {
-                        // TODO: Phase 5 will refactor search formatters to use ColorWriter
-                        output::search_formatter::format_search_files(&response, cli.no_color)?;
-                        final_output = String::new(); // Skip pager for search (writes directly)
+                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                        output::search_formatter::format_search_files(&response, &mut writer)?;
+                        final_output = writer.into_string()?;
                     }
                 }
             }
@@ -321,9 +335,23 @@ async fn main() -> Result<()> {
                     "json" => final_output = serde_json::to_string_pretty(&response)?,
                     "yaml" => final_output = serde_yaml::to_string(&response)?,
                     _ => {
-                        // TODO: Phase 5 will refactor search formatters to use ColorWriter
-                        output::search_formatter::format_search_all(&response, cli.no_color)?;
-                        final_output = String::new(); // Skip pager for search (writes directly)
+                        // Build user lookup map from search results
+                        let mut user_map: std::collections::HashMap<String, models::user::User> =
+                            std::collections::HashMap::new();
+
+                        for message in &response.messages.matches {
+                            if let Some(user_id) = &message.user {
+                                if !user_map.contains_key(user_id) {
+                                    if let Ok(user) = api::users::get_user(&client, user_id).await {
+                                        user_map.insert(user.id.clone(), user);
+                                    }
+                                }
+                            }
+                        }
+
+                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                        output::search_formatter::format_search_all(&response, &user_map, &mut writer)?;
+                        final_output = writer.into_string()?;
                     }
                 }
             }
@@ -337,9 +365,9 @@ async fn main() -> Result<()> {
                     "json" => final_output = serde_json::to_string_pretty(&channels)?,
                     "yaml" => final_output = serde_yaml::to_string(&channels)?,
                     _ => {
-                        // TODO: Phase 5 will refactor search formatters to use ColorWriter
-                        output::search_formatter::format_channel_search_results(&query, &channels, cli.no_color)?;
-                        final_output = String::new(); // Skip pager for search (writes directly)
+                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                        output::search_formatter::format_channel_search_results(&query, &channels, &mut writer)?;
+                        final_output = writer.into_string()?;
                     }
                 }
             }
