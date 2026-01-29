@@ -1,6 +1,6 @@
 use crate::models::channel::Channel;
 use crate::models::message::Message;
-use crate::models::search::{FileResult, SearchAllResponse, SearchFilesResponse, SearchMessagesResponse};
+use crate::models::search::{FileResult, SearchAllResponse, SearchFilesResponse, SearchMessagesResponse, SearchPagination};
 use crate::models::user::User;
 use crate::output::color::ColorWriter;
 use chrono::{DateTime, Local};
@@ -8,6 +8,24 @@ use std::collections::HashMap;
 use std::io::Result;
 use termcolor::Color;
 use textwrap::wrap;
+
+/// Format pagination info in a standard way
+fn format_pagination(pagination: &SearchPagination, writer: &mut ColorWriter) -> Result<()> {
+    writer.writeln()?;
+    writer.print_colored(
+        &format!(
+            "Page {} of {} ({}-{} of {} results)",
+            pagination.page,
+            pagination.page_count,
+            pagination.first,
+            pagination.last,
+            pagination.total_count
+        ),
+        Color::White,
+    )?;
+    writer.writeln()?;
+    Ok(())
+}
 
 pub fn format_search_messages(
     response: &SearchMessagesResponse,
@@ -28,6 +46,11 @@ pub fn format_search_messages(
         if i < response.messages.matches.len() - 1 {
             writer.writeln()?;
         }
+    }
+
+    // Display pagination info if available
+    if let Some(ref pagination) = response.messages.pagination {
+        format_pagination(pagination, writer)?;
     }
 
     Ok(())
@@ -140,6 +163,11 @@ pub fn format_search_files(
         }
     }
 
+    // Display pagination info if available
+    if let Some(ref pagination) = response.files.pagination {
+        format_pagination(pagination, writer)?;
+    }
+
     Ok(())
 }
 
@@ -171,6 +199,11 @@ pub fn format_search_all(
                 writer.writeln()?;
             }
         }
+
+        // Display messages pagination
+        if let Some(ref pagination) = response.messages.pagination {
+            format_pagination(pagination, writer)?;
+        }
     }
 
     // Files section
@@ -197,6 +230,11 @@ pub fn format_search_all(
             if i < response.files.matches.len() - 1 {
                 writer.writeln()?;
             }
+        }
+
+        // Display files pagination
+        if let Some(ref pagination) = response.files.pagination {
+            format_pagination(pagination, writer)?;
         }
     }
 
