@@ -206,6 +206,66 @@ pub fn get_conversation(
     }
 }
 
+/// Get a conversation from cache by name (case-insensitive).
+///
+/// This is more efficient than `get_conversations()` when looking up by name,
+/// as it queries SQLite directly instead of loading all conversations.
+///
+/// # Arguments
+/// * `conv_name` - The channel name to look up (without # prefix)
+/// * `ttl_override` - Optional TTL in seconds. If provided, overrides the default TTL.
+///   Use `Some(i64::MAX)` to effectively ignore staleness and return any cached record.
+///
+/// # Returns
+/// * `Ok(Some(channel))` - If exactly one fresh match is found
+/// * `Ok(None)` - If no match found or match is stale
+pub fn get_conversation_by_name(
+    conn: &mut CacheConnection,
+    ws_id: &str,
+    conv_name: &str,
+    verbose: bool,
+    ttl_override: Option<i64>,
+) -> Result<Option<Channel>> {
+    use super::schema::conversations::dsl::*;
+
+    // Slack channel names are lowercase, but we compare case-insensitively for robustness
+    let name_lower = conv_name.to_lowercase();
+
+    let cached_conv: Option<CachedConversation> = conversations
+        .filter(workspace_id.eq(ws_id))
+        .filter(name.eq(&name_lower))
+        .filter(deleted_at.is_null())
+        .first(conn)
+        .optional()?;
+
+    let ttl = ttl_override.unwrap_or(CONVERSATION_TTL_SECONDS);
+
+    match cached_conv {
+        Some(cached) => {
+            if is_fresh(cached.cached_at, ttl) {
+                if verbose {
+                    eprintln!(
+                        "[CACHE] Conversation '{}' - HIT (fresh, ID: {})",
+                        conv_name, cached.id
+                    );
+                }
+                Ok(Some(cached.to_api_channel()?))
+            } else {
+                if verbose {
+                    eprintln!("[CACHE] Conversation '{}' - MISS (stale)", conv_name);
+                }
+                Ok(None)
+            }
+        }
+        None => {
+            if verbose {
+                eprintln!("[CACHE] Conversation '{}' - MISS (not found)", conv_name);
+            }
+            Ok(None)
+        }
+    }
+}
+
 /// Get all conversations from cache for a workspace.
 ///
 /// # Arguments
