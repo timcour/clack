@@ -23,11 +23,17 @@ fn is_fresh(cached_at: chrono::NaiveDateTime, ttl_seconds: i64) -> bool {
 
 // User operations
 
+/// Get a user from cache by ID.
+///
+/// # Arguments
+/// * `ttl_override` - Optional TTL in seconds. If provided, overrides the default TTL.
+///   Use `Some(i64::MAX)` to effectively ignore staleness and return any cached record.
 pub fn get_user(
     conn: &mut CacheConnection,
     ws_id: &str,
     user_id: &str,
     verbose: bool,
+    ttl_override: Option<i64>,
 ) -> Result<Option<User>> {
     use super::schema::users::dsl::*;
 
@@ -38,9 +44,11 @@ pub fn get_user(
         .first(conn)
         .optional()?;
 
+    let ttl = ttl_override.unwrap_or(USER_TTL_SECONDS);
+
     match cached_user {
         Some(cached) => {
-            if is_fresh(cached.cached_at, USER_TTL_SECONDS) {
+            if is_fresh(cached.cached_at, ttl) {
                 if verbose {
                     eprintln!("[CACHE] User {} - HIT (fresh)", user_id);
                 }
@@ -61,18 +69,23 @@ pub fn get_user(
     }
 }
 
+/// Get all users from cache for a workspace.
+///
+/// # Arguments
+/// * `ttl_override` - Optional TTL in seconds. If provided, overrides the default TTL.
+///   Use `Some(i64::MAX)` to effectively ignore staleness and return any cached records.
 pub fn get_users(
     conn: &mut CacheConnection,
     ws_id: &str,
     verbose: bool,
+    ttl_override: Option<i64>,
 ) -> Result<Option<Vec<User>>> {
     use super::schema::users::dsl::*;
 
     let cached_users: Vec<CachedUser> = users
         .filter(workspace_id.eq(ws_id))
         .filter(deleted_at.is_null())
-        .load(conn)
-        ?;
+        .load(conn)?;
 
     if cached_users.is_empty() {
         if verbose {
@@ -81,19 +94,16 @@ pub fn get_users(
         return Ok(None);
     }
 
+    let ttl = ttl_override.unwrap_or(USER_TTL_SECONDS);
+
     // Check if all users are fresh
-    let all_fresh = cached_users
-        .iter()
-        .all(|u| is_fresh(u.cached_at, USER_TTL_SECONDS));
+    let all_fresh = cached_users.iter().all(|u| is_fresh(u.cached_at, ttl));
 
     if all_fresh {
         if verbose {
             eprintln!("[CACHE] Users - HIT ({} users)", cached_users.len());
         }
-        let api_users: Result<Vec<User>> = cached_users
-            .iter()
-            .map(|u| u.to_api_user())
-            .collect();
+        let api_users: Result<Vec<User>> = cached_users.iter().map(|u| u.to_api_user()).collect();
         Ok(Some(api_users?))
     } else {
         if verbose {
@@ -150,11 +160,17 @@ pub fn upsert_users(
 
 // Conversation operations
 
+/// Get a conversation from cache by ID.
+///
+/// # Arguments
+/// * `ttl_override` - Optional TTL in seconds. If provided, overrides the default TTL.
+///   Use `Some(i64::MAX)` to effectively ignore staleness and return any cached record.
 pub fn get_conversation(
     conn: &mut CacheConnection,
     ws_id: &str,
     conversation_id: &str,
     verbose: bool,
+    ttl_override: Option<i64>,
 ) -> Result<Option<Channel>> {
     use super::schema::conversations::dsl::*;
 
@@ -165,9 +181,11 @@ pub fn get_conversation(
         .first(conn)
         .optional()?;
 
+    let ttl = ttl_override.unwrap_or(CONVERSATION_TTL_SECONDS);
+
     match cached_conv {
         Some(cached) => {
-            if is_fresh(cached.cached_at, CONVERSATION_TTL_SECONDS) {
+            if is_fresh(cached.cached_at, ttl) {
                 if verbose {
                     eprintln!("[CACHE] Conversation {} - HIT (fresh)", conversation_id);
                 }
@@ -188,18 +206,23 @@ pub fn get_conversation(
     }
 }
 
+/// Get all conversations from cache for a workspace.
+///
+/// # Arguments
+/// * `ttl_override` - Optional TTL in seconds. If provided, overrides the default TTL.
+///   Use `Some(i64::MAX)` to effectively ignore staleness and return any cached records.
 pub fn get_conversations(
     conn: &mut CacheConnection,
     ws_id: &str,
     verbose: bool,
+    ttl_override: Option<i64>,
 ) -> Result<Option<Vec<Channel>>> {
     use super::schema::conversations::dsl::*;
 
     let cached_convs: Vec<CachedConversation> = conversations
         .filter(workspace_id.eq(ws_id))
         .filter(deleted_at.is_null())
-        .load(conn)
-        ?;
+        .load(conn)?;
 
     if cached_convs.is_empty() {
         if verbose {
@@ -208,18 +231,19 @@ pub fn get_conversations(
         return Ok(None);
     }
 
-    let all_fresh = cached_convs
-        .iter()
-        .all(|c| is_fresh(c.cached_at, CONVERSATION_TTL_SECONDS));
+    let ttl = ttl_override.unwrap_or(CONVERSATION_TTL_SECONDS);
+
+    let all_fresh = cached_convs.iter().all(|c| is_fresh(c.cached_at, ttl));
 
     if all_fresh {
         if verbose {
-            eprintln!("[CACHE] Conversations - HIT ({} conversations)", cached_convs.len());
+            eprintln!(
+                "[CACHE] Conversations - HIT ({} conversations)",
+                cached_convs.len()
+            );
         }
-        let api_channels: Result<Vec<Channel>> = cached_convs
-            .iter()
-            .map(|c| c.to_api_channel())
-            .collect();
+        let api_channels: Result<Vec<Channel>> =
+            cached_convs.iter().map(|c| c.to_api_channel()).collect();
         Ok(Some(api_channels?))
     } else {
         if verbose {
@@ -369,10 +393,7 @@ pub fn clear_workspace_cache(
     Ok(())
 }
 
-pub fn clear_all_cache(
-    conn: &mut CacheConnection,
-    verbose: bool,
-) -> Result<()> {
+pub fn clear_all_cache(conn: &mut CacheConnection, verbose: bool) -> Result<()> {
     use super::schema::{conversations, messages, users};
 
     diesel::delete(messages::table).execute(conn)?;
@@ -384,4 +405,45 @@ pub fn clear_all_cache(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_fresh_with_default_ttl() {
+        // Test that recently cached items are fresh
+        let now = Utc::now().naive_utc();
+        assert!(is_fresh(now, USER_TTL_SECONDS));
+
+        // Test that old items are stale
+        let old_time = now - chrono::Duration::seconds(USER_TTL_SECONDS + 1);
+        assert!(!is_fresh(old_time, USER_TTL_SECONDS));
+    }
+
+    #[test]
+    fn test_is_fresh_with_custom_ttl() {
+        let now = Utc::now().naive_utc();
+
+        // With a very short TTL (1 second), recent items should still be fresh
+        assert!(is_fresh(now, 1));
+
+        // With i64::MAX TTL, even very old items should be fresh
+        let very_old = now - chrono::Duration::days(365 * 10); // 10 years ago
+        assert!(is_fresh(very_old, i64::MAX));
+    }
+
+    #[test]
+    fn test_ttl_override_ignores_staleness() {
+        // This test verifies the concept: with i64::MAX as TTL override,
+        // any cached record should be considered fresh regardless of age
+        let ten_years_ago = Utc::now().naive_utc() - chrono::Duration::days(365 * 10);
+
+        // With default TTL, should be stale
+        assert!(!is_fresh(ten_years_ago, USER_TTL_SECONDS));
+
+        // With i64::MAX TTL override, should be fresh
+        assert!(is_fresh(ten_years_ago, i64::MAX));
+    }
 }

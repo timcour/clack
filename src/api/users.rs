@@ -47,7 +47,7 @@ pub async fn get_user(client: &SlackClient, user_id: &str) -> Result<User> {
         if let Some(pool) = client.cache_pool() {
             match cache::get_connection(pool).await {
                 Ok(mut conn) => {
-                    match cache::operations::get_user(&mut conn, workspace_id, user_id, client.verbose()) {
+                    match cache::operations::get_user(&mut conn, workspace_id, user_id, client.verbose(), None) {
                         Ok(Some(cached_user)) => {
                             return Ok(cached_user);
                         }
