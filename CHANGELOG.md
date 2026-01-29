@@ -1,3 +1,10 @@
+## [1.0.4](https://github.com/timcour/clack/compare/v1.0.3...v1.0.4) (2026-01-29)
+
+
+### Bug Fixes
+
+* **ux:** human readable names; better search; formatting tweaks ([#2](https://github.com/timcour/clack/issues/2)) ([3e58ded](https://github.com/timcour/clack/commit/3e58ded5db75c460d50471e958ce99d72bb04816))
+
 ## [1.0.3](https://github.com/timcour/clack/compare/v1.0.2...v1.0.3) (2026-01-18)
 
 
