@@ -359,25 +359,20 @@ mod tests {
     async fn test_get_channel_success() {
         let (mut server, client) = setup().await;
 
-        // Clear any potential cache pollution for this workspace
-        if let Some(pool) = client.cache_pool() {
-            if let Ok(mut conn) = cache::get_connection(pool).await {
-                let workspace_id = client.workspace_id().unwrap();
-                let _ = cache::operations::clear_workspace_cache(&mut conn, workspace_id, false);
-            }
-        }
+        // Use unique channel ID to avoid cache interference from parallel tests
+        let channel_id = "CTEST_GET_CHANNEL";
 
         let _mock = server
             .mock("GET", "/conversations.info")
-            .match_query(mockito::Matcher::UrlEncoded("channel".into(), "C123".into()))
+            .match_query(mockito::Matcher::UrlEncoded("channel".into(), channel_id.into()))
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(
                 r#"{
                 "ok": true,
                 "channel": {
-                    "id": "C123",
-                    "name": "general",
+                    "id": "CTEST_GET_CHANNEL",
+                    "name": "test-channel",
                     "is_channel": true,
                     "is_private": false,
                     "topic": {
@@ -393,9 +388,9 @@ mod tests {
             .create_async()
             .await;
 
-        let channel = get_channel(&client, "C123").await.unwrap();
-        assert_eq!(channel.id, "C123");
-        assert_eq!(channel.name, "general");
+        let channel = get_channel(&client, channel_id).await.unwrap();
+        assert_eq!(channel.id, channel_id);
+        assert_eq!(channel.name, "test-channel");
         assert_eq!(channel.num_members, Some(42));
     }
 
