@@ -113,6 +113,66 @@ pub fn get_users(
     }
 }
 
+/// Get users from cache by name (case-insensitive).
+///
+/// Searches both `name` and `profile_display_name` fields.
+/// Returns ALL matching users to handle ambiguous names.
+///
+/// # Arguments
+/// * `user_name` - The username to look up (without @ prefix)
+/// * `ttl_override` - Optional TTL in seconds. If provided, overrides the default TTL.
+///   Use `Some(i64::MAX)` to effectively ignore staleness and return any cached records.
+///
+/// # Returns
+/// * `Vec<User>` - All users matching the name (may be empty, one, or multiple)
+pub fn get_user_by_name(
+    conn: &mut CacheConnection,
+    ws_id: &str,
+    user_name: &str,
+    verbose: bool,
+    ttl_override: Option<i64>,
+) -> Result<Vec<User>> {
+    use super::schema::users::dsl::*;
+
+    let name_lower = user_name.to_lowercase();
+
+    // Query users where name or display_name matches (case-insensitive)
+    // SQLite's LIKE is case-insensitive for ASCII by default, but we use explicit LOWER()
+    let cached_users: Vec<CachedUser> = users
+        .filter(workspace_id.eq(ws_id))
+        .filter(deleted_at.is_null())
+        .load(conn)?;
+
+    let ttl = ttl_override.unwrap_or(USER_TTL_SECONDS);
+
+    // Filter by name match (case-insensitive) and freshness
+    let matching_users: Vec<User> = cached_users
+        .into_iter()
+        .filter(|u| {
+            let name_matches = u.name.to_lowercase() == name_lower;
+            let display_name_matches = u
+                .profile_display_name
+                .as_ref()
+                .is_some_and(|dn| dn.to_lowercase() == name_lower);
+            (name_matches || display_name_matches) && is_fresh(u.cached_at, ttl)
+        })
+        .filter_map(|u| u.to_api_user().ok())
+        .collect();
+
+    if verbose {
+        match matching_users.len() {
+            0 => eprintln!("[CACHE] User '{}' - MISS (not found)", user_name),
+            1 => eprintln!(
+                "[CACHE] User '{}' - HIT (ID: {})",
+                user_name, matching_users[0].id
+            ),
+            n => eprintln!("[CACHE] User '{}' - HIT ({} matches)", user_name, n),
+        }
+    }
+
+    Ok(matching_users)
+}
+
 pub fn upsert_user(
     conn: &mut CacheConnection,
     workspace_id: &str,
