@@ -8,10 +8,11 @@ use std::io::Result;
 use termcolor::Color;
 use textwrap::wrap;
 
-pub fn format_messages(
+pub fn format_messages_with_thread_info(
     messages: &[Message],
     channel: &Channel,
     users: &HashMap<String, User>,
+    thread_info: &HashMap<String, (usize, Vec<String>)>, // Map of thread_ts -> (reply_count, participants)
     writer: &mut ColorWriter,
 ) -> Result<()> {
     // Channel metadata summary
@@ -49,7 +50,7 @@ pub fn format_messages(
     writer.print_separator()?;
 
     for (i, msg) in messages.iter().enumerate() {
-        format_message(msg, &channel.name, &channel.id, users, writer)?;
+        format_message(msg, &channel.name, &channel.id, users, thread_info, writer)?;
 
         if i < messages.len() - 1 {
             writer.writeln()?;
@@ -59,11 +60,23 @@ pub fn format_messages(
     Ok(())
 }
 
+/// Backward compatibility wrapper - formats messages without thread info
+pub fn format_messages(
+    messages: &[Message],
+    channel: &Channel,
+    users: &HashMap<String, User>,
+    writer: &mut ColorWriter,
+) -> Result<()> {
+    let empty_thread_info = HashMap::new();
+    format_messages_with_thread_info(messages, channel, users, &empty_thread_info, writer)
+}
+
 fn format_message(
     msg: &Message,
     channel_name: &str,
     channel_id: &str,
     users: &HashMap<String, User>,
+    thread_info: &HashMap<String, (usize, Vec<String>)>,
     writer: &mut ColorWriter,
 ) -> Result<()> {
     // Parse timestamp and convert to local timezone
@@ -121,8 +134,9 @@ fn format_message(
     writer.print_colored(&time_str, Color::Yellow)?;
     writer.writeln()?;
 
-    // Message text wrapped to 78 chars (leaving 2 chars for indent)
-    let wrapped = wrap(&msg.text, 78);
+    // Message text wrapped dynamically to terminal width
+    let wrap_width = crate::output::width::get_wrap_width();
+    let wrapped = wrap(&msg.text, wrap_width);
     for line in wrapped {
         writer.write("  ")?;
         writer.write(&line)?;
@@ -144,10 +158,37 @@ fn format_message(
     }
 
     // Thread indicator
-    if msg.thread_ts.is_some() {
+    if let Some(thread_ts) = &msg.thread_ts {
         writer.write("  ")?;
-        writer.print_colored("💬 Part of thread", Color::Blue)?;
-        writer.writeln()?;
+
+        // Get thread metadata if available
+        if let Some((reply_count, participant_ids)) = thread_info.get(thread_ts) {
+            writer.print_colored(
+                &format!("💬 Part of thread ({} replies)", reply_count),
+                Color::Blue
+            )?;
+            writer.writeln()?;
+
+            // Show participants if any
+            if !participant_ids.is_empty() {
+                writer.write("  ")?;
+                writer.print_colored("Participants: ", Color::Blue)?;
+
+                let participant_names: Vec<String> = participant_ids
+                    .iter()
+                    .filter_map(|id| {
+                        users.get(id).map(|u| format!("@{}", u.name))
+                    })
+                    .collect();
+
+                writer.write(&participant_names.join(", "))?;
+                writer.writeln()?;
+            }
+        } else {
+            // Fallback to simple indicator
+            writer.print_colored("💬 Part of thread", Color::Blue)?;
+            writer.writeln()?;
+        }
     }
 
     // Message URL with actual channel ID
@@ -243,7 +284,7 @@ mod tests {
         let message = create_test_message("1234567890.123456", Some("U123"), "Hello world");
 
         let mut writer = ColorWriter::new(true);
-        format_message(&message, &channel.name, &channel.id, &users, &mut writer).unwrap();
+        format_message(&message, &channel.name, &channel.id, &users, &HashMap::new(), &mut writer).unwrap();
 
         // Test passes if no panic - user handle formatting is tested visually
     }
@@ -256,7 +297,7 @@ mod tests {
         let message = create_test_message("1234567890.123456", Some("U999"), "Hello world");
 
         let mut writer = ColorWriter::new(true);
-        format_message(&message, &channel.name, &channel.id, &users, &mut writer).unwrap();
+        format_message(&message, &channel.name, &channel.id, &users, &HashMap::new(), &mut writer).unwrap();
 
         // Test passes if no panic - falls back to showing user ID
     }
@@ -269,7 +310,7 @@ mod tests {
         let message = create_test_message("1234567890.123456", None, "System message");
 
         let mut writer = ColorWriter::new(true);
-        format_message(&message, &channel.name, &channel.id, &users, &mut writer).unwrap();
+        format_message(&message, &channel.name, &channel.id, &users, &HashMap::new(), &mut writer).unwrap();
 
         // Test passes if no panic - system messages shown correctly
     }
@@ -282,7 +323,7 @@ mod tests {
         let message = create_test_message("1234567890.123456", None, "Test");
 
         let mut writer = ColorWriter::new(true);
-        format_message(&message, &channel.name, &channel.id, &users, &mut writer).unwrap();
+        format_message(&message, &channel.name, &channel.id, &users, &HashMap::new(), &mut writer).unwrap();
 
         // URL should contain channel ID "C123"
         // Actual URL generation verified through integration tests
@@ -306,7 +347,7 @@ mod tests {
         ]);
 
         let mut writer = ColorWriter::new(true);
-        format_message(&message, &channel.name, &channel.id, &users, &mut writer).unwrap();
+        format_message(&message, &channel.name, &channel.id, &users, &HashMap::new(), &mut writer).unwrap();
 
         // Test passes if no panic - reactions formatted correctly
     }
@@ -320,7 +361,7 @@ mod tests {
         message.thread_ts = Some("1234567890.123456".to_string());
 
         let mut writer = ColorWriter::new(true);
-        format_message(&message, &channel.name, &channel.id, &users, &mut writer).unwrap();
+        format_message(&message, &channel.name, &channel.id, &users, &HashMap::new(), &mut writer).unwrap();
 
         // Test passes if no panic - thread indicator shown
     }
@@ -334,7 +375,7 @@ mod tests {
         let message = create_test_message("1704067200.000000", None, "New Year!");
 
         let mut writer = ColorWriter::new(true);
-        format_message(&message, &channel.name, &channel.id, &users, &mut writer).unwrap();
+        format_message(&message, &channel.name, &channel.id, &users, &HashMap::new(), &mut writer).unwrap();
 
         // Timestamp should be parsed and converted to local timezone
         // Exact output depends on system timezone

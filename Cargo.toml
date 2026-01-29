@@ -14,6 +14,9 @@ anyhow = "1.0"
 termcolor = "1.4"
 textwrap = "0.16"
 chrono = "0.4"
+minus = { version = "5.5", features = ["static_output", "search"] }
+atty = "0.2"
+terminal_size = "0.3"
 diesel = { version = "2.1", features = ["sqlite", "returning_clauses_for_sqlite_3_35", "chrono"] }
 diesel-async = { version = "0.4", features = ["async-connection-wrapper", "deadpool"] }
 diesel_migrations = "2.1"

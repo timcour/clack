@@ -29,6 +29,26 @@ pub fn format_thread(
         channel.name,
         messages.len()
     ))?;
+
+    // Calculate participants
+    let mut participant_ids = std::collections::HashSet::new();
+    for msg in messages {
+        if let Some(user_id) = &msg.user {
+            participant_ids.insert(user_id);
+        }
+    }
+
+    // Show participants
+    if !participant_ids.is_empty() {
+        writer.print_field("Participants", &{
+            let names: Vec<String> = participant_ids
+                .iter()
+                .filter_map(|id| users.get(*id).map(|u| format!("@{}", u.name)))
+                .collect();
+            names.join(", ")
+        })?;
+    }
+
     writer.print_separator()?;
 
     // Format root message
@@ -137,8 +157,10 @@ fn format_message(
     writer.print_colored(&time_str, Color::Yellow)?;
     writer.writeln()?;
 
-    // Message text wrapped to appropriate width (accounting for indent)
-    let wrap_width = if is_reply { 74 } else { 78 };
+    // Message text wrapped dynamically to terminal width (accounting for indent)
+    let base_width = crate::output::width::get_wrap_width();
+    let indent_size = if is_reply { 4 } else { 2 }; // 2 spaces for root, 4 for replies
+    let wrap_width = base_width.saturating_sub(indent_size);
     let text_indent = format!("{}  ", indent);
     let wrapped = wrap(&msg.text, wrap_width);
     for line in wrapped {

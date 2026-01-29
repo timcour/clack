@@ -1,9 +1,11 @@
 use crate::models::file::File;
+use crate::models::user::User;
 use crate::output::color::ColorWriter;
+use std::collections::HashMap;
 use std::io::Result;
 use termcolor::Color;
 
-pub fn format_files_list(files: &[File], writer: &mut ColorWriter) -> Result<()> {
+pub fn format_files_list(files: &[File], users: &HashMap<String, User>, writer: &mut ColorWriter) -> Result<()> {
     writer.print_header(&format!("Files ({})", files.len()))?;
     writer.print_separator()?;
 
@@ -29,7 +31,11 @@ pub fn format_files_list(files: &[File], writer: &mut ColorWriter) -> Result<()>
         // User and timestamp
         writer.write("  ")?;
         writer.print_colored("Uploaded by: ", Color::Blue)?;
-        writer.write(&file.user)?;
+        if let Some(user) = users.get(&file.user) {
+            writer.write(&format!("@{} ({})", user.name, file.user))?;
+        } else {
+            writer.write(&file.user)?; // Fallback to ID if user not found
+        }
         writer.write(" on ")?;
         let datetime = chrono::DateTime::from_timestamp(file.created as i64, 0)
             .unwrap_or_else(|| chrono::Utc::now());
@@ -53,8 +59,8 @@ pub fn format_files_list(files: &[File], writer: &mut ColorWriter) -> Result<()>
     Ok(())
 }
 
-pub fn format_file(file: &File, writer: &mut ColorWriter) -> Result<()> {
-    format_files_list(&vec![file.clone()], writer)
+pub fn format_file(file: &File, users: &HashMap<String, User>, writer: &mut ColorWriter) -> Result<()> {
+    format_files_list(&vec![file.clone()], users, writer)
 }
 
 fn format_size(bytes: u64) -> String {
@@ -105,8 +111,9 @@ mod tests {
     #[test]
     fn test_format_files_list() {
         let files = vec![create_test_file()];
+        let users = HashMap::new();
         let mut writer = ColorWriter::new(true);
-        format_files_list(&files, &mut writer).unwrap();
+        format_files_list(&files, &users, &mut writer).unwrap();
     }
 
     #[test]
