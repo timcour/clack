@@ -246,21 +246,33 @@ async fn main() -> Result<()> {
             SearchType::Messages {
                 query,
                 from,
+                to,
                 channel,
+                has,
                 after,
                 before,
+                during,
+                page,
                 limit,
             } => {
+                // Validate --during if provided
+                if let Some(ref d) = during {
+                    api::search::validate_during(d)?;
+                }
+
                 // Build search query with filters
-                let search_query = api::search::build_search_query(
+                let search_query = api::search::build_search_query_full(
                     &query,
                     from.as_deref(),
+                    to.as_deref(),
                     channel.as_deref(),
+                    has.as_deref(),
                     after.as_deref(),
                     before.as_deref(),
+                    during.as_deref(),
                 );
 
-                let response = api::search::search_messages(&client, &search_query, Some(limit)).await?;
+                let response = api::search::search_messages(&client, &search_query, Some(limit), Some(page)).await?;
 
                 match cli.format.as_str() {
                     "json" => final_output = serde_json::to_string_pretty(&response)?,
@@ -290,20 +302,31 @@ async fn main() -> Result<()> {
                 query,
                 from,
                 channel,
+                has,
                 after,
                 before,
+                during,
+                page,
                 limit,
             } => {
+                // Validate --during if provided
+                if let Some(ref d) = during {
+                    api::search::validate_during(d)?;
+                }
+
                 // Build search query with filters
-                let search_query = api::search::build_search_query(
+                let search_query = api::search::build_search_query_full(
                     &query,
                     from.as_deref(),
+                    None, // files don't have 'to'
                     channel.as_deref(),
+                    has.as_deref(),
                     after.as_deref(),
                     before.as_deref(),
+                    during.as_deref(),
                 );
 
-                let response = api::search::search_files(&client, &search_query, Some(limit)).await?;
+                let response = api::search::search_files(&client, &search_query, Some(limit), Some(page)).await?;
 
                 match cli.format.as_str() {
                     "json" => final_output = serde_json::to_string_pretty(&response)?,
@@ -318,6 +341,7 @@ async fn main() -> Result<()> {
             SearchType::All {
                 query,
                 channel,
+                page,
                 limit,
             } => {
                 // Build search query with filters
@@ -329,7 +353,7 @@ async fn main() -> Result<()> {
                     None,
                 );
 
-                let response = api::search::search_all(&client, &search_query, Some(limit)).await?;
+                let response = api::search::search_all(&client, &search_query, Some(limit), Some(page)).await?;
 
                 match cli.format.as_str() {
                     "json" => final_output = serde_json::to_string_pretty(&response)?,

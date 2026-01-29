@@ -170,13 +170,21 @@ pub enum SearchType {
         /// Search query
         query: String,
 
-        /// Filter by user (user ID, @username, or display name)
+        /// Filter by sender (user ID, @username, or display name)
         #[arg(long)]
         from: Option<String>,
+
+        /// Filter by recipient in DMs (user ID, @username, or display name)
+        #[arg(long)]
+        to: Option<String>,
 
         /// Filter by channel (channel ID, #name, or name)
         #[arg(long, alias = "in")]
         channel: Option<String>,
+
+        /// Filter by attachment type (link, file, image, etc.)
+        #[arg(long)]
+        has: Option<String>,
 
         /// Filter messages after date (YYYY-MM-DD or Unix timestamp)
         #[arg(long)]
@@ -186,8 +194,16 @@ pub enum SearchType {
         #[arg(long)]
         before: Option<String>,
 
-        /// Maximum number of results
-        #[arg(long, default_value = "200")]
+        /// Filter by time period (today, yesterday, week, month, year)
+        #[arg(long)]
+        during: Option<String>,
+
+        /// Page number (1-indexed)
+        #[arg(long, default_value = "1")]
+        page: u32,
+
+        /// Maximum number of results per page
+        #[arg(long, default_value = "20")]
         limit: u32,
     },
     /// Search files
@@ -203,6 +219,10 @@ pub enum SearchType {
         #[arg(long, alias = "in")]
         channel: Option<String>,
 
+        /// Filter by file type (e.g., pdf, image, etc.)
+        #[arg(long)]
+        has: Option<String>,
+
         /// Filter files after date (YYYY-MM-DD or Unix timestamp)
         #[arg(long)]
         after: Option<String>,
@@ -211,8 +231,16 @@ pub enum SearchType {
         #[arg(long)]
         before: Option<String>,
 
-        /// Maximum number of results
-        #[arg(long, default_value = "200")]
+        /// Filter by time period (today, yesterday, week, month, year)
+        #[arg(long)]
+        during: Option<String>,
+
+        /// Page number (1-indexed)
+        #[arg(long, default_value = "1")]
+        page: u32,
+
+        /// Maximum number of results per page
+        #[arg(long, default_value = "20")]
         limit: u32,
     },
     /// Search all (messages and files)
@@ -224,8 +252,12 @@ pub enum SearchType {
         #[arg(long, alias = "in")]
         channel: Option<String>,
 
-        /// Maximum number of results
-        #[arg(long, default_value = "200")]
+        /// Page number (1-indexed)
+        #[arg(long, default_value = "1")]
+        page: u32,
+
+        /// Maximum number of results per page
+        #[arg(long, default_value = "20")]
         limit: u32,
     },
     /// Search channels by name
@@ -543,13 +575,16 @@ mod tests {
                     after,
                     before,
                     limit,
+                    page,
+                    ..
                 } => {
                     assert_eq!(query, "hello world");
                     assert_eq!(from, None);
                     assert_eq!(channel, None);
                     assert_eq!(after, None);
                     assert_eq!(before, None);
-                    assert_eq!(limit, 200);
+                    assert_eq!(limit, 20); // default changed to 20
+                    assert_eq!(page, 1); // default page is 1
                 }
                 _ => panic!("Expected Messages search type"),
             },
@@ -584,6 +619,7 @@ mod tests {
                     after,
                     before,
                     limit,
+                    ..
                 } => {
                     assert_eq!(query, "deploy");
                     assert_eq!(from, Some("alice".to_string()));
@@ -621,10 +657,11 @@ mod tests {
                     query,
                     channel,
                     limit,
+                    ..
                 } => {
                     assert_eq!(query, "budget 2024");
                     assert_eq!(channel, None);
-                    assert_eq!(limit, 200);
+                    assert_eq!(limit, 20); // default is now 20
                 }
                 _ => panic!("Expected All search type"),
             },
