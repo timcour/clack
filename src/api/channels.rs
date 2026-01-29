@@ -42,18 +42,18 @@ async fn list_channels_and_find(client: &SlackClient, name: &str) -> Result<Stri
         .workspace_id()
         .ok_or_else(|| anyhow::anyhow!("Workspace ID not initialized"))?;
 
-    // Try cache first to avoid API calls (unless refresh requested)
+    // Try direct name lookup in cache first (more efficient than loading all conversations)
     if !client.refresh_cache() {
         if let Some(pool) = client.cache_pool() {
             if let Ok(mut conn) = cache::get_connection(pool).await {
-                if let Ok(Some(cached_channels)) = cache::operations::get_conversations(&mut conn, workspace_id, client.verbose()) {
-                    // Search cached channels first
-                    if let Some(channel) = cached_channels.iter().find(|ch| ch.name == name) {
-                        if client.verbose() {
-                            eprintln!("[CACHE] Channel '{}' resolved from cache to {}", name, channel.id);
-                        }
-                        return Ok(channel.id.clone());
-                    }
+                if let Ok(Some(channel)) = cache::operations::get_conversation_by_name(
+                    &mut conn,
+                    workspace_id,
+                    name,
+                    client.verbose(),
+                    None,
+                ) {
+                    return Ok(channel.id);
                 }
             }
         }
@@ -201,7 +201,7 @@ pub async fn get_channel(client: &SlackClient, channel_id: &str) -> Result<Chann
         if let Some(pool) = client.cache_pool() {
             match cache::get_connection(pool).await {
                 Ok(mut conn) => {
-                    match cache::operations::get_conversation(&mut conn, workspace_id, channel_id, client.verbose()) {
+                    match cache::operations::get_conversation(&mut conn, workspace_id, channel_id, client.verbose(), None) {
                         Ok(Some(cached_channel)) => {
                             return Ok(cached_channel);
                         }

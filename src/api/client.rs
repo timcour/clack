@@ -227,13 +227,22 @@ impl SlackClient {
         }
     }
 
-    /// Initialize workspace context by calling auth.test
+    /// Initialize workspace context by checking env var or calling auth.test
     pub async fn init_workspace(&mut self) -> Result<String> {
         if let Some(ref id) = self.workspace_id {
             return Ok(id.clone());
         }
 
-        // Import moved inside function to avoid circular dependency
+        // Check for CLACK_WORKSPACE_ID environment variable first
+        if let Ok(ws_id) = env::var("CLACK_WORKSPACE_ID") {
+            if self.verbose {
+                eprintln!("Workspace ID from env: {}", ws_id);
+            }
+            self.workspace_id = Some(ws_id.clone());
+            return Ok(ws_id);
+        }
+
+        // Fall back to auth.test API call
         use crate::api::auth::test_auth;
 
         let auth_response = test_auth(self).await?;
@@ -264,5 +273,95 @@ impl SlackClient {
     /// Check if cache refresh is enabled
     pub fn refresh_cache(&self) -> bool {
         self.refresh_cache
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    // Mutex to serialize tests that modify CLACK_WORKSPACE_ID env var
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
+
+    async fn setup_with_mock_auth(set_workspace_env: Option<&str>) -> (mockito::ServerGuard, SlackClient) {
+        let mut server = mockito::Server::new_async().await;
+        std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
+
+        // Set or clear CLACK_WORKSPACE_ID based on test needs
+        match set_workspace_env {
+            Some(val) => std::env::set_var("CLACK_WORKSPACE_ID", val),
+            None => std::env::remove_var("CLACK_WORKSPACE_ID"),
+        }
+
+        // Always set up auth.test mock in case it's needed
+        let _mock = server
+            .mock("GET", "/auth.test")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{
+                    "ok": true,
+                    "url": "https://test.slack.com/",
+                    "team_id": "T_FROM_API",
+                    "team": "Test Team",
+                    "user": "testuser",
+                    "user_id": "U123"
+                }"#,
+            )
+            .create();
+
+        let client = SlackClient::with_base_url(&server.url(), false, false, false)
+            .await
+            .unwrap();
+        (server, client)
+    }
+
+    #[tokio::test]
+    async fn test_init_workspace_uses_env_var() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+
+        let (_server, mut client) = setup_with_mock_auth(Some("T_FROM_ENV")).await;
+
+        let result = client.init_workspace().await.unwrap();
+
+        assert_eq!(result, "T_FROM_ENV");
+        assert_eq!(client.workspace_id(), Some("T_FROM_ENV"));
+
+        // Clean up
+        std::env::remove_var("CLACK_WORKSPACE_ID");
+    }
+
+    #[tokio::test]
+    async fn test_init_workspace_falls_back_to_api() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+
+        let (_server, mut client) = setup_with_mock_auth(None).await;
+
+        let result = client.init_workspace().await.unwrap();
+
+        assert_eq!(result, "T_FROM_API");
+        assert_eq!(client.workspace_id(), Some("T_FROM_API"));
+    }
+
+    #[tokio::test]
+    async fn test_init_workspace_caches_result() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+
+        let (_server, mut client) = setup_with_mock_auth(Some("T_CACHED")).await;
+
+        // First call
+        let result1 = client.init_workspace().await.unwrap();
+        assert_eq!(result1, "T_CACHED");
+
+        // Change env var - should not affect cached value
+        std::env::set_var("CLACK_WORKSPACE_ID", "T_NEW");
+
+        // Second call should return cached value
+        let result2 = client.init_workspace().await.unwrap();
+        assert_eq!(result2, "T_CACHED");
+
+        // Clean up
+        std::env::remove_var("CLACK_WORKSPACE_ID");
     }
 }
