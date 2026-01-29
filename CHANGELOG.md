@@ -1,3 +1,21 @@
+# [1.1.0](https://github.com/timcour/clack/compare/v1.0.4...v1.1.0) (2026-01-29)
+
+
+### Bug Fixes
+
+* **clack:** efficiency improvements ([#3](https://github.com/timcour/clack/issues/3)) ([80b608c](https://github.com/timcour/clack/commit/80b608c37bc6775ffe488545fd9da6befb5e69ed))
+
+
+### Features
+
+* **cache:** add direct conversation lookup by name ([aaeb83c](https://github.com/timcour/clack/commit/aaeb83c0cc8b71e9c3e8e4095f9dd70bd642b9d4))
+* **cache:** add TTL override parameter to cache lookup functions ([d99b2c9](https://github.com/timcour/clack/commit/d99b2c986e0674f24992468f1d8e9c182957fd77))
+* **cache:** add user lookup by name with multi-match handling ([611c719](https://github.com/timcour/clack/commit/611c7194c29f732ec25f62dfdc9a16a64fd50a0a))
+* **client:** use CLACK_WORKSPACE_ID env var to skip auth.test API call ([948ab76](https://github.com/timcour/clack/commit/948ab76ee87c83628f2ac559a4ac18d8713fcbbb))
+* **search:** add expanded CLI options and pagination support ([68bff91](https://github.com/timcour/clack/commit/68bff917aa8930f492b2d9ae26a5020f900cd623))
+* **search:** display pagination metadata in human-readable output ([3bd0838](https://github.com/timcour/clack/commit/3bd0838216dfaeb401ca83fff4e9968a36f360a1))
+* **search:** resolve usernames and channel names to IDs in search queries ([23a2bdb](https://github.com/timcour/clack/commit/23a2bdbcccdd69dcd4b716f8f879d3533bc86632))
+
 ## [1.0.4](https://github.com/timcour/clack/compare/v1.0.3...v1.0.4) (2026-01-29)
 
 
