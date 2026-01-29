@@ -260,12 +260,32 @@ async fn main() -> Result<()> {
                     api::search::validate_during(d)?;
                 }
 
-                // Build search query with filters
+                // Resolve user identifiers to IDs (format as <@USERID>)
+                let resolved_from = if let Some(ref user) = from {
+                    Some(format!("<@{}>", api::users::resolve_user_to_id(&client, user).await?))
+                } else {
+                    None
+                };
+
+                let resolved_to = if let Some(ref user) = to {
+                    Some(format!("<@{}>", api::users::resolve_user_to_id(&client, user).await?))
+                } else {
+                    None
+                };
+
+                // Resolve channel identifier to ID (format as <#CHANNELID>)
+                let resolved_channel = if let Some(ref ch) = channel {
+                    Some(format!("<#{}>", api::channels::resolve_channel_id(&client, ch).await?))
+                } else {
+                    None
+                };
+
+                // Build search query with resolved filters
                 let search_query = api::search::build_search_query_full(
                     &query,
-                    from.as_deref(),
-                    to.as_deref(),
-                    channel.as_deref(),
+                    resolved_from.as_deref(),
+                    resolved_to.as_deref(),
+                    resolved_channel.as_deref(),
                     has.as_deref(),
                     after.as_deref(),
                     before.as_deref(),
@@ -314,12 +334,26 @@ async fn main() -> Result<()> {
                     api::search::validate_during(d)?;
                 }
 
-                // Build search query with filters
+                // Resolve user identifier to ID (format as <@USERID>)
+                let resolved_from = if let Some(ref user) = from {
+                    Some(format!("<@{}>", api::users::resolve_user_to_id(&client, user).await?))
+                } else {
+                    None
+                };
+
+                // Resolve channel identifier to ID (format as <#CHANNELID>)
+                let resolved_channel = if let Some(ref ch) = channel {
+                    Some(format!("<#{}>", api::channels::resolve_channel_id(&client, ch).await?))
+                } else {
+                    None
+                };
+
+                // Build search query with resolved filters
                 let search_query = api::search::build_search_query_full(
                     &query,
-                    from.as_deref(),
+                    resolved_from.as_deref(),
                     None, // files don't have 'to'
-                    channel.as_deref(),
+                    resolved_channel.as_deref(),
                     has.as_deref(),
                     after.as_deref(),
                     before.as_deref(),
@@ -344,11 +378,18 @@ async fn main() -> Result<()> {
                 page,
                 limit,
             } => {
-                // Build search query with filters
+                // Resolve channel identifier to ID (format as <#CHANNELID>)
+                let resolved_channel = if let Some(ref ch) = channel {
+                    Some(format!("<#{}>", api::channels::resolve_channel_id(&client, ch).await?))
+                } else {
+                    None
+                };
+
+                // Build search query with resolved filters
                 let search_query = api::search::build_search_query(
                     &query,
                     None,
-                    channel.as_deref(),
+                    resolved_channel.as_deref(),
                     None,
                     None,
                 );
