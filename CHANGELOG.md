@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/timcour/clack/compare/v1.1.0...v1.1.1) (2026-01-30)
+
+
+### Bug Fixes
+
+* **tests:** use unique channel ID in test_get_channel_success ([79518ed](https://github.com/timcour/clack/commit/79518ed24eb98620b28be2410daababb097a6df6))
+
 # [1.1.0](https://github.com/timcour/clack/compare/v1.0.4...v1.1.0) (2026-01-29)
 
 
