@@ -1,3 +1,11 @@
+# [1.2.0](https://github.com/timcour/clack/compare/v1.1.1...v1.2.0) (2026-01-30)
+
+
+### Features
+
+* **cache:** cache messages from search results for offline access ([41d15ee](https://github.com/timcour/clack/commit/41d15eeec84c54edbbfef1ed19c3aa4768cdcc6d))
+* **stream:** add stream command for real-time message monitoring ([293854b](https://github.com/timcour/clack/commit/293854b52fe01d7a0076439438d797fd99d7d072))
+
 ## [1.1.1](https://github.com/timcour/clack/compare/v1.1.0...v1.1.1) (2026-01-30)
 
 
