@@ -20,7 +20,9 @@ mod tests {
     async fn setup() -> (mockito::ServerGuard, SlackClient) {
         let server = mockito::Server::new_async().await;
         std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
-        let client = SlackClient::with_base_url(&server.url(), false, false, false).await.unwrap();
+        let client = SlackClient::with_base_url(&server.url(), false, false, false)
+            .await
+            .unwrap();
         (server, client)
     }
 
@@ -71,6 +73,8 @@ mod tests {
         assert!(result.is_err());
         // The error message is enriched by the client with helpful context
         let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("Slack API error") || error_msg.contains("Invalid authentication"));
+        assert!(
+            error_msg.contains("Slack API error") || error_msg.contains("Invalid authentication")
+        );
     }
 }

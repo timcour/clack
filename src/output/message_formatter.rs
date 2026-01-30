@@ -165,7 +165,7 @@ fn format_message(
         if let Some((reply_count, participant_ids)) = thread_info.get(thread_ts) {
             writer.print_colored(
                 &format!("💬 Part of thread ({} replies)", reply_count),
-                Color::Blue
+                Color::Blue,
             )?;
             writer.writeln()?;
 
@@ -176,9 +176,7 @@ fn format_message(
 
                 let participant_names: Vec<String> = participant_ids
                     .iter()
-                    .filter_map(|id| {
-                        users.get(id).map(|u| format!("@{}", u.name))
-                    })
+                    .filter_map(|id| users.get(id).map(|u| format!("@{}", u.name)))
                     .collect();
 
                 writer.write(&participant_names.join(", "))?;
@@ -346,7 +344,15 @@ mod tests {
         let message = create_test_message("1234567890.123456", Some("U123"), "Hello world");
 
         let mut writer = ColorWriter::new(true);
-        format_message(&message, &channel.name, &channel.id, &users, &HashMap::new(), &mut writer).unwrap();
+        format_message(
+            &message,
+            &channel.name,
+            &channel.id,
+            &users,
+            &HashMap::new(),
+            &mut writer,
+        )
+        .unwrap();
 
         // Test passes if no panic - user handle formatting is tested visually
     }
@@ -359,7 +365,15 @@ mod tests {
         let message = create_test_message("1234567890.123456", Some("U999"), "Hello world");
 
         let mut writer = ColorWriter::new(true);
-        format_message(&message, &channel.name, &channel.id, &users, &HashMap::new(), &mut writer).unwrap();
+        format_message(
+            &message,
+            &channel.name,
+            &channel.id,
+            &users,
+            &HashMap::new(),
+            &mut writer,
+        )
+        .unwrap();
 
         // Test passes if no panic - falls back to showing user ID
     }
@@ -372,7 +386,15 @@ mod tests {
         let message = create_test_message("1234567890.123456", None, "System message");
 
         let mut writer = ColorWriter::new(true);
-        format_message(&message, &channel.name, &channel.id, &users, &HashMap::new(), &mut writer).unwrap();
+        format_message(
+            &message,
+            &channel.name,
+            &channel.id,
+            &users,
+            &HashMap::new(),
+            &mut writer,
+        )
+        .unwrap();
 
         // Test passes if no panic - system messages shown correctly
     }
@@ -385,7 +407,15 @@ mod tests {
         let message = create_test_message("1234567890.123456", None, "Test");
 
         let mut writer = ColorWriter::new(true);
-        format_message(&message, &channel.name, &channel.id, &users, &HashMap::new(), &mut writer).unwrap();
+        format_message(
+            &message,
+            &channel.name,
+            &channel.id,
+            &users,
+            &HashMap::new(),
+            &mut writer,
+        )
+        .unwrap();
 
         // URL should contain channel ID "C123"
         // Actual URL generation verified through integration tests
@@ -409,7 +439,15 @@ mod tests {
         ]);
 
         let mut writer = ColorWriter::new(true);
-        format_message(&message, &channel.name, &channel.id, &users, &HashMap::new(), &mut writer).unwrap();
+        format_message(
+            &message,
+            &channel.name,
+            &channel.id,
+            &users,
+            &HashMap::new(),
+            &mut writer,
+        )
+        .unwrap();
 
         // Test passes if no panic - reactions formatted correctly
     }
@@ -423,7 +461,15 @@ mod tests {
         message.thread_ts = Some("1234567890.123456".to_string());
 
         let mut writer = ColorWriter::new(true);
-        format_message(&message, &channel.name, &channel.id, &users, &HashMap::new(), &mut writer).unwrap();
+        format_message(
+            &message,
+            &channel.name,
+            &channel.id,
+            &users,
+            &HashMap::new(),
+            &mut writer,
+        )
+        .unwrap();
 
         // Test passes if no panic - thread indicator shown
     }
@@ -437,7 +483,15 @@ mod tests {
         let message = create_test_message("1704067200.000000", None, "New Year!");
 
         let mut writer = ColorWriter::new(true);
-        format_message(&message, &channel.name, &channel.id, &users, &HashMap::new(), &mut writer).unwrap();
+        format_message(
+            &message,
+            &channel.name,
+            &channel.id,
+            &users,
+            &HashMap::new(),
+            &mut writer,
+        )
+        .unwrap();
 
         // Timestamp should be parsed and converted to local timezone
         // Exact output depends on system timezone

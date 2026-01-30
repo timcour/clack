@@ -3,9 +3,10 @@ use chrono::Utc;
 use diesel::prelude::*;
 
 use super::db::CacheConnection;
-use super::models::{CachedConversation, CachedMessage, CachedUser};
-use super::schema::{conversations, messages, users};
+use super::models::{CachedConversation, CachedEvent, CachedMessage, CachedUser};
+use super::schema::{conversations, events, messages, users};
 use crate::models::channel::Channel;
+use crate::models::event::EventCallback;
 use crate::models::message::Message;
 use crate::models::user::User;
 
@@ -183,8 +184,7 @@ pub fn upsert_user(
 
     diesel::replace_into(users::table)
         .values(&cached)
-        .execute(conn)
-        ?;
+        .execute(conn)?;
 
     if verbose {
         eprintln!("[CACHE] User {} - UPSERTED", user.id);
@@ -207,8 +207,7 @@ pub fn upsert_users(
     for cached in cached_users {
         diesel::replace_into(users::table)
             .values(&cached)
-            .execute(conn)
-            ?;
+            .execute(conn)?;
     }
 
     if verbose {
@@ -259,7 +258,10 @@ pub fn get_conversation(
         }
         None => {
             if verbose {
-                eprintln!("[CACHE] Conversation {} - MISS (not found)", conversation_id);
+                eprintln!(
+                    "[CACHE] Conversation {} - MISS (not found)",
+                    conversation_id
+                );
             }
             Ok(None)
         }
@@ -383,11 +385,13 @@ pub fn upsert_conversation(
 
     diesel::replace_into(conversations::table)
         .values(&cached)
-        .execute(conn)
-        ?;
+        .execute(conn)?;
 
     if verbose {
-        eprintln!("[CACHE] Conversation #{} ({}) - UPSERTED", channel.name, channel.id);
+        eprintln!(
+            "[CACHE] Conversation #{} ({}) - UPSERTED",
+            channel.name, channel.id
+        );
     }
 
     Ok(())
@@ -403,16 +407,21 @@ pub fn upsert_conversations(
         let cached = CachedConversation::from_api_channel(channel, workspace_id);
         diesel::replace_into(conversations::table)
             .values(&cached)
-            .execute(conn)
-            ?;
+            .execute(conn)?;
 
         if verbose {
-            eprintln!("[CACHE] Conversation #{} ({}) - UPSERTED", channel.name, channel.id);
+            eprintln!(
+                "[CACHE] Conversation #{} ({}) - UPSERTED",
+                channel.name, channel.id
+            );
         }
     }
 
     if verbose {
-        eprintln!("[CACHE] Conversations - UPSERTED {} conversations total", channel_list.len());
+        eprintln!(
+            "[CACHE] Conversations - UPSERTED {} conversations total",
+            channel_list.len()
+        );
     }
 
     Ok(())
@@ -432,8 +441,7 @@ pub fn get_messages(
         .filter(conversation_id.eq(conv_id))
         .filter(workspace_id.eq(ws_id))
         .filter(deleted_at.is_null())
-        .load(conn)
-        ?;
+        .load(conn)?;
 
     if cached_msgs.is_empty() {
         if verbose {
@@ -448,12 +456,14 @@ pub fn get_messages(
 
     if all_fresh {
         if verbose {
-            eprintln!("[CACHE] Messages (conv {}) - HIT ({} messages)", conv_id, cached_msgs.len());
+            eprintln!(
+                "[CACHE] Messages (conv {}) - HIT ({} messages)",
+                conv_id,
+                cached_msgs.len()
+            );
         }
-        let api_messages: Result<Vec<Message>> = cached_msgs
-            .iter()
-            .map(|m| m.to_api_message())
-            .collect();
+        let api_messages: Result<Vec<Message>> =
+            cached_msgs.iter().map(|m| m.to_api_message()).collect();
         Ok(Some(api_messages?))
     } else {
         if verbose {
@@ -474,12 +484,15 @@ pub fn upsert_messages(
         let cached = CachedMessage::from_api_message(message, conv_id, workspace_id);
         diesel::replace_into(messages::table)
             .values(&cached)
-            .execute(conn)
-            ?;
+            .execute(conn)?;
     }
 
     if verbose {
-        eprintln!("[CACHE] Messages (conv {}) - UPSERTED {} messages", conv_id, message_list.len());
+        eprintln!(
+            "[CACHE] Messages (conv {}) - UPSERTED {} messages",
+            conv_id,
+            message_list.len()
+        );
     }
 
     Ok(())
@@ -495,16 +508,12 @@ pub fn clear_workspace_cache(
     use super::schema::{conversations, messages, users};
 
     diesel::delete(messages::table.filter(messages::workspace_id.eq(workspace_id)))
-        .execute(conn)
-        ?;
+        .execute(conn)?;
 
     diesel::delete(conversations::table.filter(conversations::workspace_id.eq(workspace_id)))
-        .execute(conn)
-        ?;
+        .execute(conn)?;
 
-    diesel::delete(users::table.filter(users::workspace_id.eq(workspace_id)))
-        .execute(conn)
-        ?;
+    diesel::delete(users::table.filter(users::workspace_id.eq(workspace_id))).execute(conn)?;
 
     if verbose {
         eprintln!("[CACHE] Cleared all cache for workspace {}", workspace_id);
@@ -525,6 +534,67 @@ pub fn clear_all_cache(conn: &mut CacheConnection, verbose: bool) -> Result<()> 
     }
 
     Ok(())
+}
+
+// Event operations
+
+/// Cache an event callback
+pub fn cache_event(
+    conn: &mut CacheConnection,
+    callback: &EventCallback,
+    workspace_id: &str,
+    verbose: bool,
+) -> Result<(), diesel::result::Error> {
+    let cached = CachedEvent::from_event_callback(callback, workspace_id);
+
+    diesel::insert_into(events::table)
+        .values(&cached)
+        .on_conflict((events::event_id, events::workspace_id))
+        .do_nothing()
+        .execute(conn)?;
+
+    if verbose {
+        eprintln!("[CACHE] Cached event {}", callback.event_id);
+    }
+
+    Ok(())
+}
+
+/// Get cached events with optional filters
+pub fn get_cached_events(
+    conn: &mut CacheConnection,
+    workspace_id: &str,
+    channel_id: Option<&str>,
+    user_id: Option<&str>,
+    since: Option<i64>,
+    limit: i64,
+    verbose: bool,
+) -> Result<Vec<CachedEvent>, diesel::result::Error> {
+    let mut query = events::table
+        .filter(events::workspace_id.eq(workspace_id))
+        .order(events::event_time.desc())
+        .limit(limit)
+        .into_boxed();
+
+    if let Some(ch) = channel_id {
+        query = query.filter(events::channel_id.eq(ch));
+    }
+
+    if let Some(u) = user_id {
+        query = query.filter(events::user_id.eq(u));
+    }
+
+    if let Some(ts) = since {
+        query = query.filter(events::event_time.ge(ts));
+    }
+
+    let results = query.load::<CachedEvent>(conn)?;
+
+    if verbose {
+        eprintln!("[CACHE] Retrieved {} events", results.len());
+    }
+
+    Ok(results)
 }
 
 #[cfg(test)]

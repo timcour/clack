@@ -21,11 +21,15 @@ fn test_cache_db_initialization() {
     assert!(result.is_ok(), "Failed to initialize cache: {:?}", result);
 
     // Verify database file was created
-    assert!(db_path.exists(), "Database file was not created at {:?}", db_path);
+    assert!(
+        db_path.exists(),
+        "Database file was not created at {:?}",
+        db_path
+    );
 
     let db_url = format!("sqlite://{}", db_path.display());
-    let mut conn = SqliteConnection::establish(&db_url)
-        .expect("Failed to reconnect to cache database");
+    let mut conn =
+        SqliteConnection::establish(&db_url).expect("Failed to reconnect to cache database");
     let mode = diesel::sql_query("PRAGMA journal_mode")
         .get_result::<JournalMode>(&mut conn)
         .expect("Failed to read journal_mode")

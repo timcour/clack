@@ -1,7 +1,8 @@
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
-use super::schema::{conversations, messages, users};
+use super::schema::{conversations, events, messages, users};
+use crate::models::event::{Event, EventCallback};
 
 #[derive(Debug, Queryable, Selectable, Insertable)]
 #[diesel(table_name = users)]
@@ -140,7 +141,11 @@ impl CachedConversation {
 }
 
 impl CachedMessage {
-    pub fn from_api_message(message: &crate::models::message::Message, conversation_id: &str, workspace_id: &str) -> Self {
+    pub fn from_api_message(
+        message: &crate::models::message::Message,
+        conversation_id: &str,
+        workspace_id: &str,
+    ) -> Self {
         Self {
             conversation_id: conversation_id.to_string(),
             workspace_id: workspace_id.to_string(),
@@ -158,5 +163,61 @@ impl CachedMessage {
     pub fn to_api_message(&self) -> anyhow::Result<crate::models::message::Message> {
         serde_json::from_str(&self.full_object)
             .map_err(|e| anyhow::anyhow!("Failed to deserialize cached message: {}", e))
+    }
+}
+
+#[derive(Debug, Clone, Queryable, Insertable)]
+#[diesel(table_name = events)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct CachedEvent {
+    pub event_id: String,
+    pub workspace_id: String,
+    pub event_type: String,
+    pub event_time: i64,
+    pub api_app_id: String,
+    pub channel_id: Option<String>,
+    pub user_id: Option<String>,
+    pub message_ts: Option<String>,
+    pub message_text: Option<String>,
+    pub thread_ts: Option<String>,
+    pub subtype: Option<String>,
+    pub full_payload: String,
+    pub cached_at: NaiveDateTime,
+}
+
+impl CachedEvent {
+    pub fn from_event_callback(callback: &EventCallback, workspace_id: &str) -> Self {
+        let (channel_id, user_id, message_ts, message_text, thread_ts, subtype) =
+            match &callback.event {
+                Event::Message(msg) => (
+                    Some(msg.channel.clone()),
+                    msg.user.clone(),
+                    Some(msg.ts.clone()),
+                    msg.text.clone(),
+                    msg.thread_ts.clone(),
+                    msg.subtype.clone(),
+                ),
+                Event::Unknown => (None, None, None, None, None, None),
+            };
+
+        Self {
+            event_id: callback.event_id.clone(),
+            workspace_id: workspace_id.to_string(),
+            event_type: "message".to_string(), // For now, only message events
+            event_time: callback.event_time,
+            api_app_id: callback.api_app_id.clone(),
+            channel_id,
+            user_id,
+            message_ts,
+            message_text,
+            thread_ts,
+            subtype,
+            full_payload: serde_json::to_string(callback).unwrap_or_default(),
+            cached_at: chrono::Utc::now().naive_utc(),
+        }
+    }
+
+    pub fn to_event_callback(&self) -> Option<EventCallback> {
+        serde_json::from_str(&self.full_payload).ok()
     }
 }

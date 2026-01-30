@@ -11,10 +11,10 @@ pub async fn resolve_channel_id(client: &SlackClient, identifier: &str) -> Resul
     let clean_identifier = identifier.strip_prefix('#').unwrap_or(identifier);
 
     // Check if it looks like a conversation ID (channels, DMs, groups start with C, D, or G)
-    let looks_like_id = clean_identifier.len() > 1 &&
-        (clean_identifier.starts_with('C') ||
-         clean_identifier.starts_with('D') ||
-         clean_identifier.starts_with('G'));
+    let looks_like_id = clean_identifier.len() > 1
+        && (clean_identifier.starts_with('C')
+            || clean_identifier.starts_with('D')
+            || clean_identifier.starts_with('G'));
 
     if looks_like_id {
         // Try conversations.info directly - it's faster than listing all channels
@@ -24,7 +24,10 @@ pub async fn resolve_channel_id(client: &SlackClient, identifier: &str) -> Resul
             }
             Err(e) => {
                 if client.verbose() {
-                    eprintln!("[API] conversations.info failed for '{}': {}", clean_identifier, e);
+                    eprintln!(
+                        "[API] conversations.info failed for '{}': {}",
+                        clean_identifier, e
+                    );
                     eprintln!("[API] Falling back to search by name");
                 }
                 // Fall through to name search - maybe it's actually a channel name that starts with C/D/G
@@ -61,7 +64,10 @@ async fn list_channels_and_find(client: &SlackClient, name: &str) -> Result<Stri
 
     // Not in cache - search with pagination, stopping when found
     if client.verbose() {
-        eprintln!("[API] Searching for channel '{}' via conversations.list", name);
+        eprintln!(
+            "[API] Searching for channel '{}' via conversations.list",
+            name
+        );
     }
 
     let mut cursor: Option<String> = None;
@@ -90,7 +96,12 @@ async fn list_channels_and_find(client: &SlackClient, name: &str) -> Result<Stri
         // Cache this batch immediately
         if let Some(pool) = client.cache_pool() {
             if let Ok(mut conn) = cache::get_connection(pool).await {
-                let _ = cache::operations::upsert_conversations(&mut conn, workspace_id, &channels, client.verbose());
+                let _ = cache::operations::upsert_conversations(
+                    &mut conn,
+                    workspace_id,
+                    &channels,
+                    client.verbose(),
+                );
             }
         }
 
@@ -104,7 +115,10 @@ async fn list_channels_and_find(client: &SlackClient, name: &str) -> Result<Stri
 
         // Check if there are more pages
         match response.response_metadata {
-            Some(metadata) if metadata.next_cursor.is_some() && !metadata.next_cursor.as_ref().unwrap().is_empty() => {
+            Some(metadata)
+                if metadata.next_cursor.is_some()
+                    && !metadata.next_cursor.as_ref().unwrap().is_empty() =>
+            {
                 cursor = metadata.next_cursor;
             }
             _ => break, // No more pages, channel not found
@@ -169,7 +183,10 @@ async fn fetch_all_channels(
 
         // Check if there are more pages
         match response.response_metadata {
-            Some(metadata) if metadata.next_cursor.is_some() && !metadata.next_cursor.as_ref().unwrap().is_empty() => {
+            Some(metadata)
+                if metadata.next_cursor.is_some()
+                    && !metadata.next_cursor.as_ref().unwrap().is_empty() =>
+            {
                 cursor = metadata.next_cursor;
             }
             _ => break, // No more pages
@@ -179,7 +196,11 @@ async fn fetch_all_channels(
     Ok(all_channels)
 }
 
-pub async fn list_channels(client: &SlackClient, include_archived: bool, limit: u32) -> Result<Vec<Channel>> {
+pub async fn list_channels(
+    client: &SlackClient,
+    include_archived: bool,
+    limit: u32,
+) -> Result<Vec<Channel>> {
     let workspace_id = client
         .workspace_id()
         .ok_or_else(|| anyhow::anyhow!("Workspace ID not initialized"))?;
@@ -201,7 +222,13 @@ pub async fn get_channel(client: &SlackClient, channel_id: &str) -> Result<Chann
         if let Some(pool) = client.cache_pool() {
             match cache::get_connection(pool).await {
                 Ok(mut conn) => {
-                    match cache::operations::get_conversation(&mut conn, workspace_id, channel_id, client.verbose(), None) {
+                    match cache::operations::get_conversation(
+                        &mut conn,
+                        workspace_id,
+                        channel_id,
+                        client.verbose(),
+                        None,
+                    ) {
                         Ok(Some(cached_channel)) => {
                             return Ok(cached_channel);
                         }
@@ -223,7 +250,10 @@ pub async fn get_channel(client: &SlackClient, channel_id: &str) -> Result<Chann
             }
         }
     } else if client.verbose() {
-        eprintln!("[CACHE] Conversation {} - SKIP (refresh requested)", channel_id);
+        eprintln!(
+            "[CACHE] Conversation {} - SKIP (refresh requested)",
+            channel_id
+        );
     }
 
     // Fetch from API
@@ -239,7 +269,12 @@ pub async fn get_channel(client: &SlackClient, channel_id: &str) -> Result<Chann
     // Write through to cache
     if let Some(pool) = client.cache_pool() {
         if let Ok(mut conn) = cache::get_connection(pool).await {
-            let _ = cache::operations::upsert_conversation(&mut conn, workspace_id, &channel, client.verbose());
+            let _ = cache::operations::upsert_conversation(
+                &mut conn,
+                workspace_id,
+                &channel,
+                client.verbose(),
+            );
         }
     }
 
@@ -306,7 +341,10 @@ pub async fn get_members(client: &SlackClient, channel: &str, limit: u32) -> Res
 
         // Check if there are more pages
         match response.response_metadata {
-            Some(metadata) if metadata.next_cursor.is_some() && !metadata.next_cursor.as_ref().unwrap().is_empty() => {
+            Some(metadata)
+                if metadata.next_cursor.is_some()
+                    && !metadata.next_cursor.as_ref().unwrap().is_empty() =>
+            {
                 cursor = metadata.next_cursor;
                 // Remove the old cursor from query before adding new one
                 query.retain(|(k, _)| k != &"cursor");
@@ -322,16 +360,24 @@ pub async fn get_members(client: &SlackClient, channel: &str, limit: u32) -> Res
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     async fn setup() -> (mockito::ServerGuard, SlackClient) {
         let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-        let workspace_id = format!("T{}", test_id);
+        // Use timestamp + counter to ensure unique workspace IDs across test runs
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let workspace_id = format!("TTEST{}_{}", timestamp, test_id);
 
         let mut server = mockito::Server::new_async().await;
         std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
-        let mut client = SlackClient::with_base_url(&server.url(), false, false, false).await.unwrap();
+        let mut client = SlackClient::with_base_url(&server.url(), false, false, false)
+            .await
+            .unwrap();
 
         // Mock auth.test for workspace initialization with unique workspace ID
         let auth_body = format!(
@@ -364,7 +410,10 @@ mod tests {
 
         let _mock = server
             .mock("GET", "/conversations.info")
-            .match_query(mockito::Matcher::UrlEncoded("channel".into(), channel_id.into()))
+            .match_query(mockito::Matcher::UrlEncoded(
+                "channel".into(),
+                channel_id.into(),
+            ))
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(
@@ -458,7 +507,10 @@ mod tests {
             .mock("GET", "/conversations.list")
             .match_query(mockito::Matcher::AllOf(vec![
                 mockito::Matcher::UrlEncoded("limit".into(), "200".into()),
-                mockito::Matcher::UrlEncoded("types".into(), "public_channel,private_channel".into()),
+                mockito::Matcher::UrlEncoded(
+                    "types".into(),
+                    "public_channel,private_channel".into(),
+                ),
                 mockito::Matcher::UrlEncoded("exclude_archived".into(), "true".into()),
             ]))
             .with_status(200)
@@ -501,7 +553,10 @@ mod tests {
             .mock("GET", "/conversations.list")
             .match_query(mockito::Matcher::AllOf(vec![
                 mockito::Matcher::UrlEncoded("limit".into(), "200".into()),
-                mockito::Matcher::UrlEncoded("types".into(), "public_channel,private_channel".into()),
+                mockito::Matcher::UrlEncoded(
+                    "types".into(),
+                    "public_channel,private_channel".into(),
+                ),
                 mockito::Matcher::UrlEncoded("exclude_archived".into(), "true".into()),
             ]))
             .with_status(200)
@@ -537,7 +592,10 @@ mod tests {
             .mock("GET", "/conversations.list")
             .match_query(mockito::Matcher::AllOf(vec![
                 mockito::Matcher::UrlEncoded("limit".into(), "200".into()),
-                mockito::Matcher::UrlEncoded("types".into(), "public_channel,private_channel".into()),
+                mockito::Matcher::UrlEncoded(
+                    "types".into(),
+                    "public_channel,private_channel".into(),
+                ),
                 mockito::Matcher::UrlEncoded("exclude_archived".into(), "true".into()),
             ]))
             .with_status(200)
@@ -576,7 +634,10 @@ mod tests {
             .mock("GET", "/conversations.list")
             .match_query(mockito::Matcher::AllOf(vec![
                 mockito::Matcher::UrlEncoded("limit".into(), "200".into()),
-                mockito::Matcher::UrlEncoded("types".into(), "public_channel,private_channel".into()),
+                mockito::Matcher::UrlEncoded(
+                    "types".into(),
+                    "public_channel,private_channel".into(),
+                ),
                 mockito::Matcher::UrlEncoded("exclude_archived".into(), "true".into()),
             ]))
             .with_status(200)
@@ -601,7 +662,10 @@ mod tests {
             .mock("GET", "/conversations.list")
             .match_query(mockito::Matcher::AllOf(vec![
                 mockito::Matcher::UrlEncoded("limit".into(), "200".into()),
-                mockito::Matcher::UrlEncoded("types".into(), "public_channel,private_channel".into()),
+                mockito::Matcher::UrlEncoded(
+                    "types".into(),
+                    "public_channel,private_channel".into(),
+                ),
                 mockito::Matcher::UrlEncoded("exclude_archived".into(), "true".into()),
                 mockito::Matcher::UrlEncoded("cursor".into(), "next_page_cursor".into()),
             ]))
@@ -636,7 +700,10 @@ mod tests {
             .mock("GET", "/conversations.list")
             .match_query(mockito::Matcher::AllOf(vec![
                 mockito::Matcher::UrlEncoded("limit".into(), "200".into()),
-                mockito::Matcher::UrlEncoded("types".into(), "public_channel,private_channel".into()),
+                mockito::Matcher::UrlEncoded(
+                    "types".into(),
+                    "public_channel,private_channel".into(),
+                ),
                 mockito::Matcher::UrlEncoded("exclude_archived".into(), "true".into()),
             ]))
             .with_status(200)
@@ -679,7 +746,10 @@ mod tests {
             .mock("GET", "/conversations.list")
             .match_query(mockito::Matcher::AllOf(vec![
                 mockito::Matcher::UrlEncoded("limit".into(), "200".into()),
-                mockito::Matcher::UrlEncoded("types".into(), "public_channel,private_channel".into()),
+                mockito::Matcher::UrlEncoded(
+                    "types".into(),
+                    "public_channel,private_channel".into(),
+                ),
                 mockito::Matcher::UrlEncoded("exclude_archived".into(), "true".into()),
             ]))
             .with_status(200)
@@ -718,7 +788,9 @@ mod tests {
         std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
 
         // Create client with refresh_cache=true
-        let mut client = SlackClient::with_base_url(&server.url(), false, false, true).await.unwrap();
+        let mut client = SlackClient::with_base_url(&server.url(), false, false, true)
+            .await
+            .unwrap();
 
         // Mock auth.test
         let auth_body = format!(
@@ -750,7 +822,12 @@ mod tests {
                     purpose: None,
                     num_members: None,
                 };
-                let _ = crate::cache::operations::upsert_conversation(&mut conn, &workspace_id, &stale_channel, false);
+                let _ = crate::cache::operations::upsert_conversation(
+                    &mut conn,
+                    &workspace_id,
+                    &stale_channel,
+                    false,
+                );
             }
         }
 
@@ -776,6 +853,9 @@ mod tests {
 
         // Call get_channel - should skip cache and get fresh data from API
         let channel = get_channel(&client, "CREFRESH").await.unwrap();
-        assert_eq!(channel.name, "fresh-channel", "Should get fresh data from API, not stale cache");
+        assert_eq!(
+            channel.name, "fresh-channel",
+            "Should get fresh data from API, not stale cache"
+        );
     }
 }

@@ -121,7 +121,9 @@ mod tests {
 
         let mut server = mockito::Server::new_async().await;
         std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
-        let mut client = SlackClient::with_base_url(&server.url(), false, false, false).await.unwrap();
+        let mut client = SlackClient::with_base_url(&server.url(), false, false, false)
+            .await
+            .unwrap();
 
         // Mock auth.test for workspace initialization with unique workspace ID
         let auth_body = format!(
@@ -230,7 +232,10 @@ mod tests {
         let (mut server, client) = setup().await;
 
         let _mock = server
-            .mock("GET", "/conversations.replies?channel=C123&ts=1234567890.123456")
+            .mock(
+                "GET",
+                "/conversations.replies?channel=C123&ts=1234567890.123456",
+            )
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(
@@ -275,7 +280,10 @@ mod tests {
         let (mut server, client) = setup().await;
 
         let _mock = server
-            .mock("GET", "/conversations.replies?channel=C123&ts=9999999999.999999")
+            .mock(
+                "GET",
+                "/conversations.replies?channel=C123&ts=9999999999.999999",
+            )
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(

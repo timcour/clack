@@ -60,10 +60,7 @@ pub fn format_thread(
     // Format replies if there are any
     if messages.len() > 1 {
         writer.writeln()?;
-        writer.print_colored(
-            &format!("REPLIES ({})", messages.len() - 1),
-            Color::Green,
-        )?;
+        writer.print_colored(&format!("REPLIES ({})", messages.len() - 1), Color::Green)?;
         writer.writeln()?;
         writer.print_separator()?;
 
@@ -243,7 +240,12 @@ mod tests {
         }
     }
 
-    fn create_test_message(ts: &str, user: Option<&str>, text: &str, thread_ts: Option<&str>) -> Message {
+    fn create_test_message(
+        ts: &str,
+        user: Option<&str>,
+        text: &str,
+        thread_ts: Option<&str>,
+    ) -> Message {
         Message {
             ts: ts.to_string(),
             user: user.map(|s| s.to_string()),
@@ -265,9 +267,24 @@ mod tests {
         users.insert("U456".to_string(), user2);
 
         let messages = vec![
-            create_test_message("1234567890.123456", Some("U123"), "Root message", Some("1234567890.123456")),
-            create_test_message("1234567891.123456", Some("U456"), "Reply 1", Some("1234567890.123456")),
-            create_test_message("1234567892.123456", Some("U123"), "Reply 2", Some("1234567890.123456")),
+            create_test_message(
+                "1234567890.123456",
+                Some("U123"),
+                "Root message",
+                Some("1234567890.123456"),
+            ),
+            create_test_message(
+                "1234567891.123456",
+                Some("U456"),
+                "Reply 1",
+                Some("1234567890.123456"),
+            ),
+            create_test_message(
+                "1234567892.123456",
+                Some("U123"),
+                "Reply 2",
+                Some("1234567890.123456"),
+            ),
         ];
 
         let mut writer = ColorWriter::new(true); // no_color = true for testing
@@ -283,9 +300,12 @@ mod tests {
         let mut users = HashMap::new();
         users.insert("U123".to_string(), user);
 
-        let messages = vec![
-            create_test_message("1234567890.123456", Some("U123"), "Root message", Some("1234567890.123456")),
-        ];
+        let messages = vec![create_test_message(
+            "1234567890.123456",
+            Some("U123"),
+            "Root message",
+            Some("1234567890.123456"),
+        )];
 
         let mut writer = ColorWriter::new(true);
         format_thread(&messages, &channel, &users, &mut writer).unwrap();
@@ -312,10 +332,23 @@ mod tests {
         let mut users = HashMap::new();
         users.insert("U123".to_string(), user);
 
-        let message = create_test_message("1234567891.123456", Some("U123"), "This is a reply", Some("1234567890.123456"));
+        let message = create_test_message(
+            "1234567891.123456",
+            Some("U123"),
+            "This is a reply",
+            Some("1234567890.123456"),
+        );
 
         let mut writer = ColorWriter::new(true);
-        format_message(&message, &channel.name, &channel.id, &users, &mut writer, true).unwrap();
+        format_message(
+            &message,
+            &channel.name,
+            &channel.id,
+            &users,
+            &mut writer,
+            true,
+        )
+        .unwrap();
 
         // Test that reply formatting works (indented)
     }
@@ -325,16 +358,23 @@ mod tests {
         let channel = create_test_channel();
         let users = HashMap::new();
 
-        let mut message = create_test_message("1234567890.123456", None, "Test", Some("1234567890.123456"));
-        message.reactions = Some(vec![
-            Reaction {
-                name: "thumbsup".to_string(),
-                count: 5,
-            },
-        ]);
+        let mut message =
+            create_test_message("1234567890.123456", None, "Test", Some("1234567890.123456"));
+        message.reactions = Some(vec![Reaction {
+            name: "thumbsup".to_string(),
+            count: 5,
+        }]);
 
         let mut writer = ColorWriter::new(true);
-        format_message(&message, &channel.name, &channel.id, &users, &mut writer, false).unwrap();
+        format_message(
+            &message,
+            &channel.name,
+            &channel.id,
+            &users,
+            &mut writer,
+            false,
+        )
+        .unwrap();
 
         // Test passes if no panic
     }

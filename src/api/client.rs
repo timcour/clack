@@ -29,15 +29,26 @@ impl SlackClient {
     }
 
     pub async fn new(verbose: bool, debug_response: bool, refresh_cache: bool) -> Result<Self> {
-        Self::with_base_url("https://slack.com/api", verbose, debug_response, refresh_cache).await
+        Self::with_base_url(
+            "https://slack.com/api",
+            verbose,
+            debug_response,
+            refresh_cache,
+        )
+        .await
     }
 
-    pub async fn with_base_url(base_url: &str, verbose: bool, debug_response: bool, refresh_cache: bool) -> Result<Self> {
+    pub async fn with_base_url(
+        base_url: &str,
+        verbose: bool,
+        debug_response: bool,
+        refresh_cache: bool,
+    ) -> Result<Self> {
         let token = env::var("SLACK_TOKEN").context(
             "SLACK_TOKEN environment variable not set\n\n\
              Please set your Slack API token:\n  \
              export SLACK_TOKEN=xoxb-your-token-here\n\n\
-             To create a token, visit: https://api.slack.com/authentication/token-types"
+             To create a token, visit: https://api.slack.com/authentication/token-types",
         )?;
 
         let mut headers = HeaderMap::new();
@@ -71,6 +82,22 @@ impl SlackClient {
             workspace_id: None,
             cache_pool,
         })
+    }
+
+    /// Get the app-level token for Socket Mode (xapp-...)
+    /// This is separate from the bot token (xoxb-) used for API calls
+    pub fn get_app_token() -> Result<String> {
+        env::var("SLACK_APP_TOKEN").context(
+            "SLACK_APP_TOKEN environment variable not set\n\n\
+             Socket Mode requires an app-level token:\n  \
+             export SLACK_APP_TOKEN=xapp-your-token-here\n\n\
+             To create an app-level token:\n\
+             1. Go to https://api.slack.com/apps\n\
+             2. Select your app > Basic Information\n\
+             3. Under 'App-Level Tokens', click 'Generate Token and Scopes'\n\
+             4. Add the 'connections:write' scope\n\
+             5. Copy the token (starts with xapp-)",
+        )
     }
 
     pub async fn get<T: serde::de::DeserializeOwned>(
@@ -113,7 +140,11 @@ impl SlackClient {
             // Handle rate limiting (429 Too Many Requests)
             if status.as_u16() == 429 {
                 if self.verbose {
-                    eprintln!("← {} ({}ms) - Rate limited", status.as_u16(), duration.as_millis());
+                    eprintln!(
+                        "← {} ({}ms) - Rate limited",
+                        status.as_u16(),
+                        duration.as_millis()
+                    );
                 }
                 if retry_count >= max_retries {
                     anyhow::bail!(
@@ -146,7 +177,11 @@ impl SlackClient {
 
             if !status.is_success() {
                 if self.verbose {
-                    eprintln!("← {} ({}ms) - Failed", status.as_u16(), duration.as_millis());
+                    eprintln!(
+                        "← {} ({}ms) - Failed",
+                        status.as_u16(),
+                        duration.as_millis()
+                    );
                 }
                 anyhow::bail!("API request failed: {}", status);
             }
@@ -157,7 +192,12 @@ impl SlackClient {
 
             // Log response if verbose
             if self.verbose {
-                eprintln!("← {} ({}ms, {} bytes)", status.as_u16(), duration.as_millis(), body_size);
+                eprintln!(
+                    "← {} ({}ms, {} bytes)",
+                    status.as_u16(),
+                    duration.as_millis(),
+                    body_size
+                );
             }
 
             // Debug response body if requested
@@ -199,7 +239,9 @@ impl SlackClient {
                                  You have: {}{}\n\n\
                                  Please add the required scope to your Slack app at:\n\
                                  https://api.slack.com/apps",
-                                needed, provided, additional_help
+                                needed,
+                                provided,
+                                additional_help
                             ));
                         }
                         "not_authed" => {
@@ -249,7 +291,10 @@ impl SlackClient {
         self.workspace_id = Some(auth_response.team_id.clone());
 
         if self.verbose {
-            eprintln!("Workspace: {} ({})", auth_response.team, auth_response.team_id);
+            eprintln!(
+                "Workspace: {} ({})",
+                auth_response.team, auth_response.team_id
+            );
         }
 
         Ok(auth_response.team_id)
@@ -284,7 +329,9 @@ mod tests {
     // Mutex to serialize tests that modify CLACK_WORKSPACE_ID env var
     static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
-    async fn setup_with_mock_auth(set_workspace_env: Option<&str>) -> (mockito::ServerGuard, SlackClient) {
+    async fn setup_with_mock_auth(
+        set_workspace_env: Option<&str>,
+    ) -> (mockito::ServerGuard, SlackClient) {
         let mut server = mockito::Server::new_async().await;
         std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
 

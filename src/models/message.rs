@@ -212,6 +212,9 @@ mod tests {
 
         // Second message has object channel
         assert_eq!(response.messages[1].channel.as_ref().unwrap().id(), "C456");
-        assert_eq!(response.messages[1].channel.as_ref().unwrap().name(), Some("random"));
+        assert_eq!(
+            response.messages[1].channel.as_ref().unwrap().name(),
+            Some("random")
+        );
     }
 }

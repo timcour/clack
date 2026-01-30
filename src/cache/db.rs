@@ -15,14 +15,13 @@ pub type CacheConnection = SqliteConnection;
 
 /// Get platform-specific cache directory
 pub fn get_cache_dir() -> Result<PathBuf> {
-    let cache_dir = dirs::cache_dir()
-        .context("Failed to determine cache directory for this platform")?;
+    let cache_dir =
+        dirs::cache_dir().context("Failed to determine cache directory for this platform")?;
 
     let clack_cache = cache_dir.join("clack");
 
     // Create directory if it doesn't exist
-    std::fs::create_dir_all(&clack_cache)
-        .context("Failed to create clack cache directory")?;
+    std::fs::create_dir_all(&clack_cache).context("Failed to create clack cache directory")?;
 
     Ok(clack_cache)
 }
@@ -48,8 +47,8 @@ pub fn init_cache_db_at_path(db_path: &PathBuf, verbose: bool) -> Result<()> {
     }
 
     // Create synchronous connection for migrations
-    let mut conn = SqliteConnection::establish(&db_url)
-        .context("Failed to connect to cache database")?;
+    let mut conn =
+        SqliteConnection::establish(&db_url).context("Failed to connect to cache database")?;
 
     // Enable WAL mode (must be done outside of a transaction)
     diesel::sql_query("PRAGMA journal_mode = WAL")
@@ -95,8 +94,8 @@ pub async fn get_connection(pool: &CachePool) -> Result<CacheConnection> {
     let db_url = pool.lock().await.clone();
 
     // Create sync connection
-    let conn = SqliteConnection::establish(&db_url)
-        .context("Failed to establish SQLite connection")?;
+    let conn =
+        SqliteConnection::establish(&db_url).context("Failed to establish SQLite connection")?;
 
     Ok(conn)
 }

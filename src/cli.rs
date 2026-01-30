@@ -84,6 +84,16 @@ pub enum Commands {
         #[command(subcommand)]
         stream_type: StreamType,
     },
+    /// Listen to Slack events in real-time via Socket Mode
+    ///
+    /// Requires Socket Mode to be enabled in your Slack app settings
+    /// and a SLACK_APP_TOKEN environment variable (starts with xapp-).
+    ///
+    /// Example: clack events listen --channel general
+    Events {
+        #[command(subcommand)]
+        command: EventsCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -410,6 +420,38 @@ pub enum StreamSearchType {
     },
 }
 
+#[derive(Subcommand)]
+pub enum EventsCommands {
+    /// Listen to events in real-time (requires Socket Mode app token)
+    Listen {
+        /// Filter to specific channels (can be specified multiple times)
+        #[arg(long)]
+        channel: Vec<String>,
+
+        /// Filter to specific users (can be specified multiple times)
+        #[arg(long)]
+        from: Vec<String>,
+    },
+    /// List cached events from previous listening sessions
+    List {
+        /// Filter to specific channel
+        #[arg(long)]
+        channel: Option<String>,
+
+        /// Filter to specific user
+        #[arg(long)]
+        from: Option<String>,
+
+        /// Only show events since this Unix timestamp or date (e.g., "2026-01-29")
+        #[arg(long)]
+        since: Option<String>,
+
+        /// Maximum number of events to return
+        #[arg(long, default_value = "50")]
+        limit: i64,
+    },
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -425,7 +467,14 @@ mod tests {
 
     #[test]
     fn test_users_list_command_with_options() {
-        let cli = Cli::parse_from(["clack", "users", "list", "--limit", "50", "--include-deleted"]);
+        let cli = Cli::parse_from([
+            "clack",
+            "users",
+            "list",
+            "--limit",
+            "50",
+            "--include-deleted",
+        ]);
         match cli.command {
             Commands::Users { command } => match command {
                 UsersCommands::List {
@@ -528,7 +577,13 @@ mod tests {
 
     #[test]
     fn test_conversations_replies_command() {
-        let cli = Cli::parse_from(["clack", "conversations", "replies", "C123", "1234567890.123456"]);
+        let cli = Cli::parse_from([
+            "clack",
+            "conversations",
+            "replies",
+            "C123",
+            "1234567890.123456",
+        ]);
         match cli.command {
             Commands::Conversations { command } => match command {
                 ConversationsCommands::Replies {
@@ -546,7 +601,13 @@ mod tests {
 
     #[test]
     fn test_conversations_replies_command_with_channel_name() {
-        let cli = Cli::parse_from(["clack", "conversations", "replies", "#general", "1234567890.123456"]);
+        let cli = Cli::parse_from([
+            "clack",
+            "conversations",
+            "replies",
+            "#general",
+            "1234567890.123456",
+        ]);
         match cli.command {
             Commands::Conversations { command } => match command {
                 ConversationsCommands::Replies {
@@ -567,7 +628,10 @@ mod tests {
         let cli = Cli::parse_from(["clack", "conversations", "list"]);
         match cli.command {
             Commands::Conversations { command } => match command {
-                ConversationsCommands::List { include_archived, limit } => {
+                ConversationsCommands::List {
+                    include_archived,
+                    limit,
+                } => {
                     assert!(!include_archived);
                     assert_eq!(limit, 200); // default value
                 }
@@ -582,7 +646,10 @@ mod tests {
         let cli = Cli::parse_from(["clack", "conversations", "list", "--include-archived"]);
         match cli.command {
             Commands::Conversations { command } => match command {
-                ConversationsCommands::List { include_archived, limit } => {
+                ConversationsCommands::List {
+                    include_archived,
+                    limit,
+                } => {
                     assert!(include_archived);
                     assert_eq!(limit, 200); // default value
                 }
@@ -732,7 +799,13 @@ mod tests {
 
     #[test]
     fn test_search_channels_with_archived() {
-        let cli = Cli::parse_from(["clack", "search", "channels", "old-project", "--include-archived"]);
+        let cli = Cli::parse_from([
+            "clack",
+            "search",
+            "channels",
+            "old-project",
+            "--include-archived",
+        ]);
         match cli.command {
             Commands::Search { search_type } => match search_type {
                 SearchType::Channels {
@@ -803,10 +876,16 @@ mod tests {
                 stream_type,
             } => {
                 assert_eq!(interval, 10); // default
-                // format comes from global cli.format
+                                          // format comes from global cli.format
                 match stream_type {
                     StreamType::Search { search_type } => match search_type {
-                        StreamSearchType::Messages { query, from, to, channel, has } => {
+                        StreamSearchType::Messages {
+                            query,
+                            from,
+                            to,
+                            channel,
+                            has,
+                        } => {
                             assert_eq!(query, "hello");
                             assert_eq!(from, None);
                             assert_eq!(to, None);
@@ -846,7 +925,12 @@ mod tests {
                 assert_eq!(interval, 30);
                 match stream_type {
                     StreamType::Search { search_type } => match search_type {
-                        StreamSearchType::Messages { query, from, channel, .. } => {
+                        StreamSearchType::Messages {
+                            query,
+                            from,
+                            channel,
+                            ..
+                        } => {
                             assert_eq!(query, "deploy");
                             assert_eq!(from, Some("alice".to_string()));
                             assert_eq!(channel, Some("engineering".to_string()));
@@ -860,7 +944,14 @@ mod tests {
 
     #[test]
     fn test_human_compact_format() {
-        let cli = Cli::parse_from(["clack", "--format", "human-compact", "search", "messages", "test"]);
+        let cli = Cli::parse_from([
+            "clack",
+            "--format",
+            "human-compact",
+            "search",
+            "messages",
+            "test",
+        ]);
         assert_eq!(cli.format, "human-compact");
     }
 }

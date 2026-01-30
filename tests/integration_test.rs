@@ -10,7 +10,9 @@ fn test_missing_slack_token() {
         .arg("list")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("SLACK_TOKEN environment variable not set"));
+        .stderr(predicate::str::contains(
+            "SLACK_TOKEN environment variable not set",
+        ));
 }
 
 #[test]
@@ -54,7 +56,9 @@ fn test_users_info_command_help() {
         .arg("--help")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Get information about a specific user"))
+        .stdout(predicate::str::contains(
+            "Get information about a specific user",
+        ))
         .stdout(predicate::str::contains("<USER_ID>"));
 }
 
@@ -66,7 +70,9 @@ fn test_conversations_history_command_help() {
         .arg("--help")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Get message history from a channel"))
+        .stdout(predicate::str::contains(
+            "Get message history from a channel",
+        ))
         .stdout(predicate::str::contains("--limit"))
         .stdout(predicate::str::contains("--latest"))
         .stdout(predicate::str::contains("--oldest"));

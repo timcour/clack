@@ -1,4 +1,5 @@
 pub mod channel;
+pub mod event;
 pub mod file;
 pub mod message;
 pub mod pin;

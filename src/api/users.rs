@@ -1,6 +1,8 @@
 use super::client::SlackClient;
 use crate::cache;
-use crate::models::user::{User, UserInfoResponse, UserProfile, UserProfileResponse, UsersListResponse};
+use crate::models::user::{
+    User, UserInfoResponse, UserProfile, UserProfileResponse, UsersListResponse,
+};
 use anyhow::Result;
 
 pub async fn list_users(
@@ -25,7 +27,8 @@ pub async fn list_users(
     // Write through to cache (best effort, don't fail on cache errors)
     if let Some(pool) = client.cache_pool() {
         if let Ok(mut conn) = cache::get_connection(pool).await {
-            let _ = cache::operations::upsert_users(&mut conn, workspace_id, &users, client.verbose());
+            let _ =
+                cache::operations::upsert_users(&mut conn, workspace_id, &users, client.verbose());
         }
     }
 
@@ -47,7 +50,13 @@ pub async fn get_user(client: &SlackClient, user_id: &str) -> Result<User> {
         if let Some(pool) = client.cache_pool() {
             match cache::get_connection(pool).await {
                 Ok(mut conn) => {
-                    match cache::operations::get_user(&mut conn, workspace_id, user_id, client.verbose(), None) {
+                    match cache::operations::get_user(
+                        &mut conn,
+                        workspace_id,
+                        user_id,
+                        client.verbose(),
+                        None,
+                    ) {
                         Ok(Some(cached_user)) => {
                             return Ok(cached_user);
                         }
@@ -85,7 +94,8 @@ pub async fn get_user(client: &SlackClient, user_id: &str) -> Result<User> {
     // Write through to cache
     if let Some(pool) = client.cache_pool() {
         if let Ok(mut conn) = cache::get_connection(pool).await {
-            let _ = cache::operations::upsert_user(&mut conn, workspace_id, &user, client.verbose());
+            let _ =
+                cache::operations::upsert_user(&mut conn, workspace_id, &user, client.verbose());
         }
     }
 
@@ -162,17 +172,10 @@ pub async fn resolve_user_to_id(client: &SlackClient, identifier: &str) -> Resul
                 }
                 _ => {
                     // Multiple matches - format them for display
-                    let mut msg = format!(
-                        "Multiple users match '{}':\n\n",
-                        clean_identifier
-                    );
+                    let mut msg = format!("Multiple users match '{}':\n\n", clean_identifier);
 
                     for user in &matches {
-                        let display_name = user
-                            .profile
-                            .display_name
-                            .as_deref()
-                            .unwrap_or("");
+                        let display_name = user.profile.display_name.as_deref().unwrap_or("");
                         let real_name = user.real_name.as_deref().unwrap_or("");
 
                         msg.push_str(&format!(
@@ -201,16 +204,24 @@ pub async fn resolve_user_to_id(client: &SlackClient, identifier: &str) -> Resul
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     async fn setup() -> (mockito::ServerGuard, SlackClient) {
         let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-        let workspace_id = format!("T{}", test_id);
+        // Use timestamp + counter to ensure unique workspace IDs across test runs
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let workspace_id = format!("TTEST{}_{}", timestamp, test_id);
 
         let mut server = mockito::Server::new_async().await;
         std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
-        let mut client = SlackClient::with_base_url(&server.url(), false, false, false).await.unwrap();
+        let mut client = SlackClient::with_base_url(&server.url(), false, false, false)
+            .await
+            .unwrap();
 
         // Mock auth.test for workspace initialization with unique workspace ID
         let auth_body = format!(
@@ -225,6 +236,13 @@ mod tests {
             .create();
 
         client.init_workspace().await.unwrap();
+
+        // Clear any cached data for this workspace
+        if let Some(pool) = client.cache_pool() {
+            if let Ok(mut conn) = cache::get_connection(pool).await {
+                let _ = cache::operations::clear_workspace_cache(&mut conn, &workspace_id, false);
+            }
+        }
 
         (server, client)
     }
@@ -396,7 +414,9 @@ mod tests {
         std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
 
         // Create client with refresh_cache=true
-        let mut client = SlackClient::with_base_url(&server.url(), false, false, true).await.unwrap();
+        let mut client = SlackClient::with_base_url(&server.url(), false, false, true)
+            .await
+            .unwrap();
 
         // Mock auth.test
         let auth_body = format!(
@@ -432,7 +452,8 @@ mod tests {
                         image_72: None,
                     },
                 };
-                let _ = cache::operations::upsert_user(&mut conn, &workspace_id, &stale_user, false);
+                let _ =
+                    cache::operations::upsert_user(&mut conn, &workspace_id, &stale_user, false);
             }
         }
 
@@ -462,7 +483,10 @@ mod tests {
 
         // Call get_user - should skip cache and get fresh data from API
         let user = get_user(&client, "UREFRESH").await.unwrap();
-        assert_eq!(user.name, "freshuser", "Should get fresh data from API, not stale cache");
+        assert_eq!(
+            user.name, "freshuser",
+            "Should get fresh data from API, not stale cache"
+        );
         assert_eq!(user.profile.email, Some("fresh@example.com".to_string()));
     }
 

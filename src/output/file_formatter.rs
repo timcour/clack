@@ -5,7 +5,11 @@ use std::collections::HashMap;
 use std::io::Result;
 use termcolor::Color;
 
-pub fn format_files_list(files: &[File], users: &HashMap<String, User>, writer: &mut ColorWriter) -> Result<()> {
+pub fn format_files_list(
+    files: &[File],
+    users: &HashMap<String, User>,
+    writer: &mut ColorWriter,
+) -> Result<()> {
     writer.print_header(&format!("Files ({})", files.len()))?;
     writer.print_separator()?;
 
@@ -59,7 +63,11 @@ pub fn format_files_list(files: &[File], users: &HashMap<String, User>, writer: 
     Ok(())
 }
 
-pub fn format_file(file: &File, users: &HashMap<String, User>, writer: &mut ColorWriter) -> Result<()> {
+pub fn format_file(
+    file: &File,
+    users: &HashMap<String, User>,
+    writer: &mut ColorWriter,
+) -> Result<()> {
     format_files_list(&vec![file.clone()], users, writer)
 }
 

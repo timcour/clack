@@ -11,10 +11,10 @@ clack:
 	@echo "Binary built: target/release/clack"
 
 build:
-	cargo build
+	cargo build -j $(shell nproc)
 
 test:
-	cargo test --all-features
+	cargo test --all-features  -j $(shell nproc)
 
 deps:
 	@echo "Installing Rust toolchain if needed..."

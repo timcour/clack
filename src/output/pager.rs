@@ -33,7 +33,8 @@ impl OutputDestination {
     pub fn write_str(&mut self, s: &str) -> Result<()> {
         match self {
             OutputDestination::Pager(pager) => {
-                writeln!(pager, "{}", s).map_err(|e| anyhow::anyhow!("Pager write error: {}", e))?;
+                writeln!(pager, "{}", s)
+                    .map_err(|e| anyhow::anyhow!("Pager write error: {}", e))?;
                 Ok(())
             }
             OutputDestination::Direct(buffer) => {

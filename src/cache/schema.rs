@@ -61,8 +61,22 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(
-    conversations,
-    messages,
-    users,
-);
+diesel::table! {
+    events (event_id, workspace_id) {
+        event_id -> Text,
+        workspace_id -> Text,
+        event_type -> Text,
+        event_time -> BigInt,
+        api_app_id -> Text,
+        channel_id -> Nullable<Text>,
+        user_id -> Nullable<Text>,
+        message_ts -> Nullable<Text>,
+        message_text -> Nullable<Text>,
+        thread_ts -> Nullable<Text>,
+        subtype -> Nullable<Text>,
+        full_payload -> Text,
+        cached_at -> Timestamp,
+    }
+}
+
+diesel::allow_tables_to_appear_in_same_query!(conversations, events, messages, users,);

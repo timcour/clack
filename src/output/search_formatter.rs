@@ -1,6 +1,8 @@
 use crate::models::channel::Channel;
 use crate::models::message::Message;
-use crate::models::search::{FileResult, SearchAllResponse, SearchFilesResponse, SearchMessagesResponse, SearchPagination};
+use crate::models::search::{
+    FileResult, SearchAllResponse, SearchFilesResponse, SearchMessagesResponse, SearchPagination,
+};
 use crate::models::user::User;
 use crate::output::color::ColorWriter;
 use chrono::{DateTime, Local};
@@ -35,7 +37,11 @@ pub fn format_search_messages(
     writer.print_header(&format!(
         "Found {} message{} matching '{}'",
         response.messages.total,
-        if response.messages.total == 1 { "" } else { "s" },
+        if response.messages.total == 1 {
+            ""
+        } else {
+            "s"
+        },
         response.query
     ))?;
     writer.print_separator()?;
@@ -138,10 +144,7 @@ pub fn format_search_message(
     Ok(())
 }
 
-pub fn format_search_files(
-    response: &SearchFilesResponse,
-    writer: &mut ColorWriter,
-) -> Result<()> {
+pub fn format_search_files(response: &SearchFilesResponse, writer: &mut ColorWriter) -> Result<()> {
     writer.print_header(&format!(
         "Found {} file{} matching '{}'",
         response.files.total,
@@ -185,7 +188,11 @@ pub fn format_search_all(
             &format!(
                 "{} Message{}:",
                 response.messages.total,
-                if response.messages.total == 1 { "" } else { "s" }
+                if response.messages.total == 1 {
+                    ""
+                } else {
+                    "s"
+                }
             ),
             Color::Yellow,
         )?;

@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::message::Message;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SearchMessagesResponse {

@@ -24,10 +24,7 @@ pub async fn search_messages(
     let response: SearchMessagesResponse = client.get("search.messages", &params).await?;
 
     if !response.ok {
-        anyhow::bail!(
-            "Slack API error: {}",
-            response.error.unwrap_or_default()
-        );
+        anyhow::bail!("Slack API error: {}", response.error.unwrap_or_default());
     }
 
     Ok(response)
@@ -52,10 +49,7 @@ pub async fn search_files(
     let response: SearchFilesResponse = client.get("search.files", &params).await?;
 
     if !response.ok {
-        anyhow::bail!(
-            "Slack API error: {}",
-            response.error.unwrap_or_default()
-        );
+        anyhow::bail!("Slack API error: {}", response.error.unwrap_or_default());
     }
 
     Ok(response)
@@ -80,10 +74,7 @@ pub async fn search_all(
     let response: SearchAllResponse = client.get("search.all", &params).await?;
 
     if !response.ok {
-        anyhow::bail!(
-            "Slack API error: {}",
-            response.error.unwrap_or_default()
-        );
+        anyhow::bail!("Slack API error: {}", response.error.unwrap_or_default());
     }
 
     Ok(response)
@@ -205,7 +196,8 @@ pub async fn cache_search_messages(client: &SlackClient, messages: &[Message]) {
     }
 
     if client.verbose() {
-        eprintln!("[CACHE] Search results - cached {} messages from {} channels",
+        eprintln!(
+            "[CACHE] Search results - cached {} messages from {} channels",
             messages.len(),
             channel_count
         );
@@ -258,7 +250,9 @@ mod tests {
     async fn setup() -> (mockito::ServerGuard, SlackClient) {
         let server = mockito::Server::new_async().await;
         std::env::set_var("SLACK_TOKEN", "xoxb-test-token");
-        let client = SlackClient::with_base_url(&server.url(), false, false, false).await.unwrap();
+        let client = SlackClient::with_base_url(&server.url(), false, false, false)
+            .await
+            .unwrap();
         (server, client)
     }
 
@@ -324,7 +318,9 @@ mod tests {
             .create_async()
             .await;
 
-        let _result = search_messages(&client, "hello", Some(50), None).await.unwrap();
+        let _result = search_messages(&client, "hello", Some(50), None)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -352,7 +348,9 @@ mod tests {
             .create_async()
             .await;
 
-        let _result = search_messages(&client, "hello", None, Some(2)).await.unwrap();
+        let _result = search_messages(&client, "hello", None, Some(2))
+            .await
+            .unwrap();
     }
 
     #[tokio::test]

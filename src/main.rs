@@ -3,13 +3,15 @@ mod cache;
 mod cli;
 mod models;
 mod output;
+mod socket;
 mod stream;
 
 use anyhow::Result;
 use clap::Parser;
 use cli::{
-    AuthType, ChatCommands, Cli, Commands, ConversationsCommands, FilesCommands, PinsCommands,
-    ProfileCommands, ReactionsCommands, SearchType, StreamSearchType, StreamType, UsersCommands,
+    AuthType, ChatCommands, Cli, Commands, ConversationsCommands, EventsCommands, FilesCommands,
+    PinsCommands, ProfileCommands, ReactionsCommands, SearchType, StreamSearchType, StreamType,
+    UsersCommands,
 };
 
 #[tokio::main]
@@ -17,7 +19,8 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Create API client with verbose, debug_response, and refresh_cache flags
-    let mut client = api::client::SlackClient::new(cli.verbose, cli.debug_response, cli.refresh_cache).await?;
+    let mut client =
+        api::client::SlackClient::new(cli.verbose, cli.debug_response, cli.refresh_cache).await?;
 
     // Initialize workspace context (fetches team_id)
     client.init_workspace().await?;
@@ -74,8 +77,12 @@ async fn main() -> Result<()> {
             },
         },
         Commands::Conversations { command } => match command {
-            ConversationsCommands::List { include_archived, limit } => {
-                let channels = api::channels::list_channels(&client, include_archived, limit).await?;
+            ConversationsCommands::List {
+                include_archived,
+                limit,
+            } => {
+                let channels =
+                    api::channels::list_channels(&client, include_archived, limit).await?;
 
                 final_output = match cli.format.as_str() {
                     "json" => serde_json::to_string_pretty(&channels)?,
@@ -98,7 +105,10 @@ async fn main() -> Result<()> {
                     _ => {
                         let mut writer = output::color::ColorWriter::new(cli.no_color);
                         // Reuse format_channels_list with a single-element vector
-                        output::channel_formatter::format_channels_list(&vec![channel_info], &mut writer)?;
+                        output::channel_formatter::format_channels_list(
+                            &vec![channel_info],
+                            &mut writer,
+                        )?;
                         writer.into_string()?
                     }
                 }
@@ -113,7 +123,8 @@ async fn main() -> Result<()> {
                 let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
 
                 let messages =
-                    api::messages::list_messages(&client, &channel_id, limit, latest, oldest).await?;
+                    api::messages::list_messages(&client, &channel_id, limit, latest, oldest)
+                        .await?;
 
                 final_output = match cli.format.as_str() {
                     "json" => serde_json::to_string_pretty(&messages)?,
@@ -138,8 +149,10 @@ async fn main() -> Result<()> {
                         }
 
                         // Build thread metadata map
-                        let mut thread_info: std::collections::HashMap<String, (usize, Vec<String>)> =
-                            std::collections::HashMap::new();
+                        let mut thread_info: std::collections::HashMap<
+                            String,
+                            (usize, Vec<String>),
+                        > = std::collections::HashMap::new();
 
                         // Identify unique threads
                         let thread_timestamps: std::collections::HashSet<&String> = messages
@@ -149,14 +162,22 @@ async fn main() -> Result<()> {
 
                         // Fetch metadata for each thread
                         for thread_ts in thread_timestamps {
-                            if let Ok(thread_messages) = api::messages::get_thread(&client, &channel_id, thread_ts).await {
-                                let (reply_count, participant_ids) = api::messages::get_thread_metadata(&thread_messages);
-                                thread_info.insert(thread_ts.clone(), (reply_count, participant_ids.clone()));
+                            if let Ok(thread_messages) =
+                                api::messages::get_thread(&client, &channel_id, thread_ts).await
+                            {
+                                let (reply_count, participant_ids) =
+                                    api::messages::get_thread_metadata(&thread_messages);
+                                thread_info.insert(
+                                    thread_ts.clone(),
+                                    (reply_count, participant_ids.clone()),
+                                );
 
                                 // Also add participants to user_map
                                 for user_id in &participant_ids {
                                     if !user_map.contains_key(user_id) {
-                                        if let Ok(user) = api::users::get_user(&client, user_id).await {
+                                        if let Ok(user) =
+                                            api::users::get_user(&client, user_id).await
+                                        {
                                             user_map.insert(user.id.clone(), user);
                                         }
                                     }
@@ -263,20 +284,29 @@ async fn main() -> Result<()> {
 
                 // Resolve user identifiers to IDs (format as <@USERID>)
                 let resolved_from = if let Some(ref user) = from {
-                    Some(format!("<@{}>", api::users::resolve_user_to_id(&client, user).await?))
+                    Some(format!(
+                        "<@{}>",
+                        api::users::resolve_user_to_id(&client, user).await?
+                    ))
                 } else {
                     None
                 };
 
                 let resolved_to = if let Some(ref user) = to {
-                    Some(format!("<@{}>", api::users::resolve_user_to_id(&client, user).await?))
+                    Some(format!(
+                        "<@{}>",
+                        api::users::resolve_user_to_id(&client, user).await?
+                    ))
                 } else {
                     None
                 };
 
                 // Resolve channel identifier to ID (format as <#CHANNELID>)
                 let resolved_channel = if let Some(ref ch) = channel {
-                    Some(format!("<#{}>", api::channels::resolve_channel_id(&client, ch).await?))
+                    Some(format!(
+                        "<#{}>",
+                        api::channels::resolve_channel_id(&client, ch).await?
+                    ))
                 } else {
                     None
                 };
@@ -293,7 +323,9 @@ async fn main() -> Result<()> {
                     during.as_deref(),
                 );
 
-                let response = api::search::search_messages(&client, &search_query, Some(limit), Some(page)).await?;
+                let response =
+                    api::search::search_messages(&client, &search_query, Some(limit), Some(page))
+                        .await?;
 
                 // Cache search result messages for offline access
                 api::search::cache_search_messages(&client, &response.messages.matches).await;
@@ -317,7 +349,11 @@ async fn main() -> Result<()> {
                         }
 
                         let mut writer = output::color::ColorWriter::new(cli.no_color);
-                        output::search_formatter::format_search_messages(&response, &user_map, &mut writer)?;
+                        output::search_formatter::format_search_messages(
+                            &response,
+                            &user_map,
+                            &mut writer,
+                        )?;
                         final_output = writer.into_string()?;
                     }
                 }
@@ -340,14 +376,20 @@ async fn main() -> Result<()> {
 
                 // Resolve user identifier to ID (format as <@USERID>)
                 let resolved_from = if let Some(ref user) = from {
-                    Some(format!("<@{}>", api::users::resolve_user_to_id(&client, user).await?))
+                    Some(format!(
+                        "<@{}>",
+                        api::users::resolve_user_to_id(&client, user).await?
+                    ))
                 } else {
                     None
                 };
 
                 // Resolve channel identifier to ID (format as <#CHANNELID>)
                 let resolved_channel = if let Some(ref ch) = channel {
-                    Some(format!("<#{}>", api::channels::resolve_channel_id(&client, ch).await?))
+                    Some(format!(
+                        "<#{}>",
+                        api::channels::resolve_channel_id(&client, ch).await?
+                    ))
                 } else {
                     None
                 };
@@ -364,7 +406,9 @@ async fn main() -> Result<()> {
                     during.as_deref(),
                 );
 
-                let response = api::search::search_files(&client, &search_query, Some(limit), Some(page)).await?;
+                let response =
+                    api::search::search_files(&client, &search_query, Some(limit), Some(page))
+                        .await?;
 
                 match cli.format.as_str() {
                     "json" => final_output = serde_json::to_string_pretty(&response)?,
@@ -384,7 +428,10 @@ async fn main() -> Result<()> {
             } => {
                 // Resolve channel identifier to ID (format as <#CHANNELID>)
                 let resolved_channel = if let Some(ref ch) = channel {
-                    Some(format!("<#{}>", api::channels::resolve_channel_id(&client, ch).await?))
+                    Some(format!(
+                        "<#{}>",
+                        api::channels::resolve_channel_id(&client, ch).await?
+                    ))
                 } else {
                     None
                 };
@@ -398,7 +445,9 @@ async fn main() -> Result<()> {
                     None,
                 );
 
-                let response = api::search::search_all(&client, &search_query, Some(limit), Some(page)).await?;
+                let response =
+                    api::search::search_all(&client, &search_query, Some(limit), Some(page))
+                        .await?;
 
                 // Cache search result messages for offline access
                 api::search::cache_search_messages(&client, &response.messages.matches).await;
@@ -422,7 +471,11 @@ async fn main() -> Result<()> {
                         }
 
                         let mut writer = output::color::ColorWriter::new(cli.no_color);
-                        output::search_formatter::format_search_all(&response, &user_map, &mut writer)?;
+                        output::search_formatter::format_search_all(
+                            &response,
+                            &user_map,
+                            &mut writer,
+                        )?;
                         final_output = writer.into_string()?;
                     }
                 }
@@ -431,22 +484,33 @@ async fn main() -> Result<()> {
                 query,
                 include_archived,
             } => {
-                let channels = api::channels::search_channels(&client, &query, include_archived).await?;
+                let channels =
+                    api::channels::search_channels(&client, &query, include_archived).await?;
 
                 match cli.format.as_str() {
                     "json" => final_output = serde_json::to_string_pretty(&channels)?,
                     "yaml" => final_output = serde_yaml::to_string(&channels)?,
                     _ => {
                         let mut writer = output::color::ColorWriter::new(cli.no_color);
-                        output::search_formatter::format_channel_search_results(&query, &channels, &mut writer)?;
+                        output::search_formatter::format_channel_search_results(
+                            &query,
+                            &channels,
+                            &mut writer,
+                        )?;
                         final_output = writer.into_string()?;
                     }
                 }
             }
         },
         Commands::Files { command } => match command {
-            FilesCommands::List { limit, user, channel } => {
-                let files = api::files::list_files(&client, limit, user.as_deref(), channel.as_deref()).await?;
+            FilesCommands::List {
+                limit,
+                user,
+                channel,
+            } => {
+                let files =
+                    api::files::list_files(&client, limit, user.as_deref(), channel.as_deref())
+                        .await?;
 
                 final_output = match cli.format.as_str() {
                     "json" => serde_json::to_string_pretty(&files)?,
@@ -509,7 +573,10 @@ async fn main() -> Result<()> {
                     }
                 }
             }
-            PinsCommands::Add { channel, message_ts } => {
+            PinsCommands::Add {
+                channel,
+                message_ts,
+            } => {
                 // Resolve channel name to ID if needed
                 let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
 
@@ -517,7 +584,10 @@ async fn main() -> Result<()> {
 
                 println!("✓ Message pinned successfully");
             }
-            PinsCommands::Remove { channel, message_ts } => {
+            PinsCommands::Remove {
+                channel,
+                message_ts,
+            } => {
                 // Resolve channel name to ID if needed
                 let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
 
@@ -527,7 +597,11 @@ async fn main() -> Result<()> {
             }
         },
         Commands::Reactions { command } => match command {
-            ReactionsCommands::Add { channel, message_ts, emoji } => {
+            ReactionsCommands::Add {
+                channel,
+                message_ts,
+                emoji,
+            } => {
                 // Resolve channel name to ID if needed
                 let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
 
@@ -535,7 +609,11 @@ async fn main() -> Result<()> {
 
                 println!("✓ Reaction :{}: added successfully", emoji);
             }
-            ReactionsCommands::Remove { channel, message_ts, emoji } => {
+            ReactionsCommands::Remove {
+                channel,
+                message_ts,
+                emoji,
+            } => {
                 // Resolve channel name to ID if needed
                 let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
 
@@ -545,7 +623,11 @@ async fn main() -> Result<()> {
             }
         },
         Commands::Chat { command } => match command {
-            ChatCommands::Post { channel, text, thread_ts } => {
+            ChatCommands::Post {
+                channel,
+                text,
+                thread_ts,
+            } => {
                 // Resolve channel name to ID if needed
                 let channel_id = api::channels::resolve_channel_id(&client, &channel).await?;
 
@@ -559,7 +641,13 @@ async fn main() -> Result<()> {
                     text.clone()
                 };
 
-                let ts = api::chat::post_message(&client, &channel_id, &message_text, thread_ts.as_deref()).await?;
+                let ts = api::chat::post_message(
+                    &client,
+                    &channel_id,
+                    &message_text,
+                    thread_ts.as_deref(),
+                )
+                .await?;
 
                 println!("✓ Message posted successfully");
                 println!("Message timestamp: {}", ts);
@@ -651,6 +739,134 @@ async fn main() -> Result<()> {
                         .await?;
                     }
                 },
+            }
+        }
+        Commands::Events { command } => {
+            match command {
+                EventsCommands::Listen { channel, from } => {
+                    // Get app token for Socket Mode
+                    let app_token = api::client::SlackClient::get_app_token()?;
+
+                    // Resolve channel names to IDs if needed
+                    let mut channel_ids = Vec::new();
+                    for ch in &channel {
+                        let channel_id = api::channels::resolve_channel_id(&client, ch).await?;
+                        channel_ids.push(channel_id);
+                    }
+
+                    // Resolve user names to IDs if needed
+                    let mut user_ids = Vec::new();
+                    for user in &from {
+                        let user_id = api::users::resolve_user_to_id(&client, user).await?;
+                        user_ids.push(user_id);
+                    }
+
+                    let filter = socket::events::EventFilter {
+                        channels: channel_ids,
+                        users: user_ids,
+                    };
+
+                    socket::events::listen_events(
+                        &client,
+                        &app_token,
+                        filter,
+                        &cli.format,
+                        cli.no_color,
+                        cli.verbose,
+                    )
+                    .await?;
+                }
+                EventsCommands::List {
+                    channel,
+                    from,
+                    since,
+                    limit,
+                } => {
+                    use anyhow::Context;
+
+                    // Resolve channel name if provided
+                    let channel_id = if let Some(ch) = &channel {
+                        Some(api::channels::resolve_channel_id(&client, ch).await?)
+                    } else {
+                        None
+                    };
+
+                    // Resolve user name if provided
+                    let user_id = if let Some(u) = &from {
+                        Some(api::users::resolve_user_to_id(&client, u).await?)
+                    } else {
+                        None
+                    };
+
+                    // Parse since timestamp
+                    let since_ts = if let Some(s) = &since {
+                        // Try parsing as Unix timestamp first
+                        if let Ok(ts) = s.parse::<i64>() {
+                            Some(ts)
+                        } else {
+                            // Try parsing as date
+                            use chrono::NaiveDate;
+                            if let Ok(date) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+                                Some(date.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp())
+                            } else {
+                                anyhow::bail!("Invalid --since value. Use Unix timestamp or YYYY-MM-DD format.");
+                            }
+                        }
+                    } else {
+                        None
+                    };
+
+                    // Get cached events
+                    let cached_events = if let Some(pool) = client.cache_pool() {
+                        let mut conn = cache::db::get_connection(pool).await?;
+                        let workspace_id = client.workspace_id().context("No workspace ID")?;
+                        cache::operations::get_cached_events(
+                            &mut conn,
+                            workspace_id,
+                            channel_id.as_deref(),
+                            user_id.as_deref(),
+                            since_ts,
+                            limit,
+                            cli.verbose,
+                        )?
+                    } else {
+                        vec![]
+                    };
+
+                    // Output
+                    if cached_events.is_empty() {
+                        eprintln!("No cached events found.");
+                    } else {
+                        for cached in &cached_events {
+                            if let Some(callback) = cached.to_event_callback() {
+                                match cli.format.as_str() {
+                                    "json" => println!("{}", serde_json::to_string(&callback)?),
+                                    "yaml" => println!("{}", serde_yaml::to_string(&callback)?),
+                                    _ => {
+                                        // Human-readable format
+                                        if let models::event::Event::Message(msg) = &callback.event
+                                        {
+                                            println!(
+                                                "[{}] #{} {}: {}",
+                                                chrono::DateTime::from_timestamp(
+                                                    callback.event_time,
+                                                    0
+                                                )
+                                                .map(|dt| dt
+                                                    .format("%Y-%m-%d %H:%M:%S")
+                                                    .to_string())
+                                                .unwrap_or_else(|| callback.event_time.to_string()),
+                                                msg.channel,
+                                                msg.effective_user().unwrap_or("unknown"),
+                                                msg.display_text()
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
