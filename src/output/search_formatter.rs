@@ -56,7 +56,7 @@ pub fn format_search_messages(
     Ok(())
 }
 
-fn format_search_message(
+pub fn format_search_message(
     msg: &Message,
     users: &HashMap<String, User>,
     writer: &mut ColorWriter,

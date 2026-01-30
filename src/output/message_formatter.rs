@@ -203,6 +203,68 @@ fn format_message(
     Ok(())
 }
 
+/// Format a single message in compact single-line format.
+/// Includes: timestamp, channel, user, truncated text, and permalink.
+/// Used for streaming output and human-compact format.
+pub fn format_message_compact(
+    msg: &Message,
+    users: &HashMap<String, User>,
+    writer: &mut ColorWriter,
+) -> Result<()> {
+    // Parse message timestamp for display
+    let ts_float: f64 = msg.ts.parse().unwrap_or(0.0);
+    let dt_utc = DateTime::from_timestamp(ts_float as i64, 0).unwrap_or_default();
+    let dt_local: DateTime<Local> = dt_utc.into();
+
+    // Timestamp prefix
+    writer.print_colored(
+        &format!("[{}] ", dt_local.format("%Y-%m-%d %H:%M")),
+        Color::White,
+    )?;
+
+    // Channel
+    if let Some(channel) = &msg.channel {
+        if let Some(name) = channel.name() {
+            writer.print_colored(&format!("#{}", name), Color::Green)?;
+        } else {
+            writer.print_colored(&format!("#{}", channel.id()), Color::Green)?;
+        }
+        writer.write(" ")?;
+    }
+
+    // User
+    if let Some(user_id) = &msg.user {
+        if let Some(user) = users.get(user_id) {
+            writer.print_colored(&format!("@{}", user.name), Color::Cyan)?;
+        } else {
+            writer.print_colored(user_id, Color::Cyan)?;
+        }
+    } else {
+        writer.print_colored("<system>", Color::White)?;
+    }
+    writer.write(": ")?;
+
+    // Message text (single line, truncated if needed)
+    let text = msg.text.replace('\n', " ");
+    let max_len = 80;
+    let truncated = if text.chars().count() > max_len {
+        let truncated_text: String = text.chars().take(max_len - 3).collect();
+        format!("{}...", truncated_text)
+    } else {
+        text
+    };
+    writer.write(&truncated)?;
+
+    // Permalink (always include for compact format)
+    if let Some(permalink) = &msg.permalink {
+        writer.write(" ")?;
+        writer.print_colored(permalink, Color::Blue)?;
+    }
+
+    writer.writeln()?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

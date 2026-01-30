@@ -3,12 +3,13 @@ mod cache;
 mod cli;
 mod models;
 mod output;
+mod stream;
 
 use anyhow::Result;
 use clap::Parser;
 use cli::{
     AuthType, ChatCommands, Cli, Commands, ConversationsCommands, FilesCommands, PinsCommands,
-    ProfileCommands, ReactionsCommands, SearchType, UsersCommands,
+    ProfileCommands, ReactionsCommands, SearchType, StreamSearchType, StreamType, UsersCommands,
 };
 
 #[tokio::main]
@@ -579,6 +580,79 @@ async fn main() -> Result<()> {
                 }
             }
         },
+        Commands::Stream {
+            interval,
+            stream_type,
+        } => {
+            // For streaming, use human-compact if default "human" format is specified
+            let effective_format = if cli.format == "human" {
+                "human-compact"
+            } else {
+                &cli.format
+            };
+
+            match stream_type {
+                StreamType::Search { search_type } => match search_type {
+                    StreamSearchType::Messages {
+                        query,
+                        from,
+                        to,
+                        channel,
+                        has,
+                    } => {
+                        // Resolve user identifiers to IDs
+                        let resolved_from = if let Some(ref user) = from {
+                            Some(format!(
+                                "<@{}>",
+                                api::users::resolve_user_to_id(&client, user).await?
+                            ))
+                        } else {
+                            None
+                        };
+
+                        let resolved_to = if let Some(ref user) = to {
+                            Some(format!(
+                                "<@{}>",
+                                api::users::resolve_user_to_id(&client, user).await?
+                            ))
+                        } else {
+                            None
+                        };
+
+                        let resolved_channel = if let Some(ref ch) = channel {
+                            Some(format!(
+                                "<#{}>",
+                                api::channels::resolve_channel_id(&client, ch).await?
+                            ))
+                        } else {
+                            None
+                        };
+
+                        // Build search query with resolved filters
+                        let search_query = api::search::build_search_query_full(
+                            &query,
+                            resolved_from.as_deref(),
+                            resolved_to.as_deref(),
+                            resolved_channel.as_deref(),
+                            has.as_deref(),
+                            None,
+                            None,
+                            None,
+                        );
+
+                        // Run the streaming loop
+                        stream::search::stream_search_messages(
+                            &client,
+                            &search_query,
+                            interval,
+                            effective_format,
+                            cli.no_color,
+                        )
+                        .await?;
+                    }
+                },
+            }
+        }
     }
 
     // Output with pager if enabled

@@ -12,7 +12,7 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub no_color: bool,
 
-    /// Output format (human, json, yaml)
+    /// Output format (human, human-compact, json, yaml)
     #[arg(long, global = true, default_value = "human")]
     pub format: String,
 
@@ -74,6 +74,15 @@ pub enum Commands {
     Auth {
         #[command(subcommand)]
         auth_type: AuthType,
+    },
+    /// Stream real-time updates (runs until Ctrl+C)
+    Stream {
+        /// Poll interval in seconds
+        #[arg(long, default_value = "10")]
+        interval: u64,
+
+        #[command(subcommand)]
+        stream_type: StreamType,
     },
 }
 
@@ -365,6 +374,40 @@ pub enum ChatCommands {
 pub enum AuthType {
     /// Test authentication and display workspace metadata
     Test,
+}
+
+#[derive(Subcommand)]
+pub enum StreamType {
+    /// Stream search results
+    Search {
+        #[command(subcommand)]
+        search_type: StreamSearchType,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum StreamSearchType {
+    /// Stream message search results
+    Messages {
+        /// Search query
+        query: String,
+
+        /// Filter by sender (user ID, @username, or display name)
+        #[arg(long)]
+        from: Option<String>,
+
+        /// Filter by recipient in DMs (user ID, @username, or display name)
+        #[arg(long)]
+        to: Option<String>,
+
+        /// Filter by channel (channel ID, #name, or name)
+        #[arg(long, alias = "in")]
+        channel: Option<String>,
+
+        /// Filter by attachment type (link, file, image, etc.)
+        #[arg(long)]
+        has: Option<String>,
+    },
 }
 
 #[cfg(test)]
@@ -749,5 +792,75 @@ mod tests {
     fn test_refresh_cache_default_false() {
         let cli = Cli::parse_from(["clack", "users", "list"]);
         assert!(!cli.refresh_cache);
+    }
+
+    #[test]
+    fn test_stream_search_messages_basic() {
+        let cli = Cli::parse_from(["clack", "stream", "search", "messages", "hello"]);
+        match cli.command {
+            Commands::Stream {
+                interval,
+                stream_type,
+            } => {
+                assert_eq!(interval, 10); // default
+                // format comes from global cli.format
+                match stream_type {
+                    StreamType::Search { search_type } => match search_type {
+                        StreamSearchType::Messages { query, from, to, channel, has } => {
+                            assert_eq!(query, "hello");
+                            assert_eq!(from, None);
+                            assert_eq!(to, None);
+                            assert_eq!(channel, None);
+                            assert_eq!(has, None);
+                        }
+                    },
+                }
+            }
+            _ => panic!("Expected Stream command"),
+        }
+    }
+
+    #[test]
+    fn test_stream_search_messages_with_options() {
+        let cli = Cli::parse_from([
+            "clack",
+            "--format",
+            "json",
+            "stream",
+            "--interval",
+            "30",
+            "search",
+            "messages",
+            "deploy",
+            "--from",
+            "alice",
+            "--channel",
+            "engineering",
+        ]);
+        assert_eq!(cli.format, "json"); // global format
+        match cli.command {
+            Commands::Stream {
+                interval,
+                stream_type,
+            } => {
+                assert_eq!(interval, 30);
+                match stream_type {
+                    StreamType::Search { search_type } => match search_type {
+                        StreamSearchType::Messages { query, from, channel, .. } => {
+                            assert_eq!(query, "deploy");
+                            assert_eq!(from, Some("alice".to_string()));
+                            assert_eq!(channel, Some("engineering".to_string()));
+                        }
+                    },
+                }
+            }
+            _ => panic!("Expected Stream command"),
+        }
+    }
+
+    #[test]
+    fn test_human_compact_format() {
+        let cli = Cli::parse_from(["clack", "--format", "human-compact", "search", "messages", "test"]);
+        assert_eq!(cli.format, "human-compact");
     }
 }
