@@ -294,6 +294,9 @@ async fn main() -> Result<()> {
 
                 let response = api::search::search_messages(&client, &search_query, Some(limit), Some(page)).await?;
 
+                // Cache search result messages for offline access
+                api::search::cache_search_messages(&client, &response.messages.matches).await;
+
                 match cli.format.as_str() {
                     "json" => final_output = serde_json::to_string_pretty(&response)?,
                     "yaml" => final_output = serde_yaml::to_string(&response)?,
@@ -395,6 +398,9 @@ async fn main() -> Result<()> {
                 );
 
                 let response = api::search::search_all(&client, &search_query, Some(limit), Some(page)).await?;
+
+                // Cache search result messages for offline access
+                api::search::cache_search_messages(&client, &response.messages.matches).await;
 
                 match cli.format.as_str() {
                     "json" => final_output = serde_json::to_string_pretty(&response)?,

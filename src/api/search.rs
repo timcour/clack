@@ -1,6 +1,9 @@
 use super::client::SlackClient;
+use crate::cache;
+use crate::models::message::Message;
 use crate::models::search::{SearchAllResponse, SearchFilesResponse, SearchMessagesResponse};
 use anyhow::Result;
+use std::collections::HashMap;
 
 pub async fn search_messages(
     client: &SlackClient,
@@ -156,6 +159,57 @@ pub fn build_search_query_full(
     }
 
     query
+}
+
+/// Cache messages from search results.
+///
+/// Search result messages include channel info, allowing us to cache them
+/// for offline access. Messages are grouped by channel for efficient caching.
+pub async fn cache_search_messages(client: &SlackClient, messages: &[Message]) {
+    let workspace_id = match client.workspace_id() {
+        Some(id) => id,
+        None => return,
+    };
+
+    let pool = match client.cache_pool() {
+        Some(p) => p,
+        None => return,
+    };
+
+    let mut conn = match cache::get_connection(pool).await {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    // Group messages by channel ID for efficient caching
+    let mut by_channel: HashMap<String, Vec<Message>> = HashMap::new();
+
+    for msg in messages {
+        if let Some(ref channel) = msg.channel {
+            let channel_id = channel.id().to_string();
+            by_channel.entry(channel_id).or_default().push(msg.clone());
+        }
+    }
+
+    let channel_count = by_channel.len();
+
+    // Cache each group
+    for (channel_id, channel_messages) in by_channel {
+        let _ = cache::operations::upsert_messages(
+            &mut conn,
+            workspace_id,
+            &channel_id,
+            &channel_messages,
+            client.verbose(),
+        );
+    }
+
+    if client.verbose() {
+        eprintln!("[CACHE] Search results - cached {} messages from {} channels",
+            messages.len(),
+            channel_count
+        );
+    }
 }
 
 #[cfg(test)]
