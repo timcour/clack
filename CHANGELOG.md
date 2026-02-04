@@ -1,3 +1,10 @@
+## [1.3.2](https://github.com/timcour/clack/compare/v1.3.1...v1.3.2) (2026-02-04)
+
+
+### Bug Fixes
+
+* **search:** search by timestamp desc ([8321eb3](https://github.com/timcour/clack/commit/8321eb3fa72611e53cc04f4dbce10560e70c4c23))
+
 ## [1.3.1](https://github.com/timcour/clack/compare/v1.3.0...v1.3.1) (2026-02-04)
 
 
