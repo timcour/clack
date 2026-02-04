@@ -1,88 +1,219 @@
-..TH CLACK 1 "2026-01-01" "clack" "User Commands"
+.TH CLACK 1 "2026-02-04" "clack 1.2.0" "User Commands"
 .SH NAME
 clack \- Slack API CLI tool
 .SH SYNOPSIS
 .B clack
-[\fIglobal options\fR]
+[\fIglobal-options\fR]
 \fIcommand\fR
-[\fIcommand options\fR]
+[\fIcommand-options\fR]
+.PP
+.B clack
+\fIslack-url\fR
 .SH DESCRIPTION
-Clack is a Slack API CLI tool that focuses on readable, human-first output
-while still supporting JSON and YAML for automation. It can query users,
-channels, messages, files, pins, reactions, and search endpoints, and it
-maintains a local SQLite cache to speed up repeated queries.
-.SH COMMANDS
+Clack is a Slack API CLI tool that provides human-readable output while supporting JSON and YAML for automation. It maintains a local SQLite cache to speed up repeated queries.
+.SH GLOBAL OPTIONS
 .TP
-.B users
-List users or fetch user details and profiles.
-.TP
-.B conversations
-List channels, inspect channel info, fetch history, replies, or members.
-.TP
-.B files
-List files or fetch file details.
-.TP
-.B pins
-List, add, or remove pins.
-.TP
-.B reactions
-Add or remove reactions.
-.TP
-.B chat
-Post messages.
-.TP
-.B search
-Search messages, files, or both.
-.TP
-.B auth
-Run authentication checks.
-.SH OPTIONS
-.TP
-.B \-\-no-color
+.B \-\-no\-color
 Disable colorized output.
 .TP
-.B \-\-format \fIhuman|json|yaml\fR
-Select output format (default: human).
+.B \-\-format \fIFORMAT\fR
+Output format: human (default), human-compact, json, yaml.
 .TP
-.B \-v, \-\-verbose
-Enable verbose logging.
+.B \-\-no\-pager
+Disable pager for scrollable output.
 .TP
-.B \-\-debug-response
-Print raw HTTP responses for debugging.
+.B \-v\fR, \fB\-\-verbose
+Enable verbose logging (shows cache hits/misses).
 .TP
-.B \-\-refresh-cache
-Bypass the local cache and query Slack directly.
+.B \-\-debug\-response
+Print raw HTTP response bodies for debugging.
+.TP
+.B \-\-refresh\-cache
+Bypass cache and query Slack API directly.
+.SH COMMANDS
+.SS users
+User-related commands.
+.TP
+.B clack users list \fR[\fB\-\-limit\fR \fIN\fR] [\fB\-\-include\-deleted\fR]
+List all users. Default limit is 200.
+.TP
+.B clack users info \fIUSER_ID\fR
+Get information about a specific user.
+.TP
+.B clack users profile get \fR[\fIUSER_ID\fR]
+Get user profile (defaults to authenticated user).
+.SS conversations
+Channel and message commands.
+.TP
+.B clack conversations list \fR[\fB\-\-include\-archived\fR] [\fB\-\-limit\fR \fIN\fR]
+List all accessible channels. Default limit is 200.
+.TP
+.B clack conversations info \fICHANNEL\fR
+Get information about a channel. CHANNEL can be ID, #name, or name.
+.TP
+.B clack conversations history \fICHANNEL\fR \fR[\fB\-\-limit\fR \fIN\fR] [\fB\-\-latest\fR \fITS\fR] [\fB\-\-oldest\fR \fITS\fR]
+Get message history from a channel.
+.TP
+.B clack conversations replies \fICHANNEL\fR \fIMESSAGE_TS\fR
+Get all replies in a thread.
+.TP
+.B clack conversations members \fICHANNEL\fR \fR[\fB\-\-limit\fR \fIN\fR]
+List members of a channel.
+.SS search
+Search commands.
+.TP
+.B clack search messages \fIQUERY\fR \fR[\fIOPTIONS\fR]
+Search messages. Options: \fB\-\-from\fR, \fB\-\-to\fR, \fB\-\-channel\fR/\fB\-\-in\fR,
+\fB\-\-has\fR, \fB\-\-after\fR, \fB\-\-before\fR, \fB\-\-during\fR, \fB\-\-page\fR, \fB\-\-limit\fR.
+.TP
+.B clack search files \fIQUERY\fR \fR[\fIOPTIONS\fR]
+Search files. Options: \fB\-\-from\fR, \fB\-\-channel\fR/\fB\-\-in\fR,
+\fB\-\-has\fR, \fB\-\-after\fR, \fB\-\-before\fR, \fB\-\-during\fR, \fB\-\-page\fR, \fB\-\-limit\fR.
+.TP
+.B clack search all \fIQUERY\fR \fR[\fB\-\-channel\fR \fICH\fR] [\fB\-\-page\fR \fIN\fR] [\fB\-\-limit\fR \fIN\fR]
+Search messages and files together.
+.TP
+.B clack search channels \fIQUERY\fR \fR[\fB\-\-include\-archived\fR]
+Search channels by name.
+.SS files
+File commands.
+.TP
+.B clack files list \fR[\fB\-\-limit\fR \fIN\fR] [\fB\-\-user\fR \fIUSER\fR] [\fB\-\-channel\fR \fICH\fR]
+List files in workspace.
+.TP
+.B clack files info \fIFILE_ID\fR
+Get information about a file.
+.SS pins
+Pin commands.
+.TP
+.B clack pins list \fICHANNEL\fR
+List pinned items in a channel.
+.TP
+.B clack pins add \fICHANNEL\fR \fIMESSAGE_TS\fR
+Pin a message.
+.TP
+.B clack pins remove \fICHANNEL\fR \fIMESSAGE_TS\fR
+Unpin a message.
+.SS reactions
+Reaction commands.
+.TP
+.B clack reactions add \fICHANNEL\fR \fIMESSAGE_TS\fR \fIEMOJI\fR
+Add a reaction (emoji without colons, e.g., thumbsup).
+.TP
+.B clack reactions remove \fICHANNEL\fR \fIMESSAGE_TS\fR \fIEMOJI\fR
+Remove a reaction.
+.SS chat
+Message posting commands.
+.TP
+.B clack chat post \fICHANNEL\fR \fITEXT\fR \fR[\fB\-\-thread\-ts\fR \fITS\fR]
+Post a message. Use \fB\-\fR for TEXT to read from stdin.
+.SS auth
+Authentication commands.
+.TP
+.B clack auth test
+Test authentication and display workspace metadata.
+.SS stream
+Real-time streaming commands (runs until Ctrl+C).
+.TP
+.B clack stream \fR[\fB\-\-interval\fR \fISECS\fR] search messages \fIQUERY\fR \fR[\fIOPTIONS\fR]
+Stream message search results. Options: \fB\-\-from\fR, \fB\-\-to\fR, \fB\-\-channel\fR, \fB\-\-has\fR.
+.SS events
+Socket Mode event commands.
+.TP
+.B clack events listen \fR[\fB\-\-channel\fR \fICH\fR]... [\fB\-\-from\fR \fIUSER\fR]...
+Listen to events in real-time. Requires SLACK_APP_TOKEN.
+.TP
+.B clack events list \fR[\fB\-\-channel\fR \fICH\fR] [\fB\-\-from\fR \fIUSER\fR] [\fB\-\-since\fR \fITS\fR] [\fB\-\-limit\fR \fIN\fR]
+List cached events from previous sessions.
+.SS cache
+Local cache inspection commands.
+.TP
+.B clack cache list \fITABLE\fR \fR[\fB\-\-limit\fR \fIN\fR]
+List cached records (default limit 16). TABLE: users, conversations, messages, events.
+.TP
+.B clack cache show \fITABLE\fR \fIID\fR
+Show a specific cached record. ID format depends on table:
+.RS
+.IP \(bu 2
+users: USER_ID (e.g., U123ABC)
+.IP \(bu 2
+conversations: CHANNEL_ID (e.g., C123ABC)
+.IP \(bu 2
+messages: CHANNEL_ID:TIMESTAMP (e.g., C123:1234567890.123456)
+.IP \(bu 2
+events: EVENT_ID (e.g., Ev123ABC)
+.RE
+.SH URL HANDLING
+Clack can render Slack objects directly from URLs:
+.PP
+.B clack \fIhttps://workspace.slack.com/archives/C123/p1234567890123456\fR
+.PP
+This parses the URL and displays the message with full context (channel info, user info, thread if applicable). URL formats supported:
+.TP
+.I https://workspace.slack.com/archives/CHANNEL_ID/pTIMESTAMP
+Show a specific message.
+.TP
+.I https://workspace.slack.com/archives/CHANNEL_ID
+Show channel information.
 .SH ENVIRONMENT
 .TP
 .B SLACK_TOKEN
-Slack bot token with appropriate scopes for the endpoints you use.
+Slack bot token (required). Must have appropriate scopes for the endpoints used.
+.TP
+.B SLACK_APP_TOKEN
+Socket Mode app token (required for \fBevents listen\fR). Starts with \fBxapp-\fR.
+.TP
+.B CLACK_WORKSPACE_ID
+Optional workspace ID override. Skips auth.test call if set.
+.TP
+.B NO_COLOR
+If set, disables colorized output (same as \fB\-\-no\-color\fR).
 .SH FILES
 .TP
 .I ~/.cache/clack/cache.db
-Default cache database on Linux. Other platforms use the OS cache directory
-(\fBdirs::cache_dir\fR), such as \fI~/Library/Caches/clack/cache.db\fR on macOS.
-.SH EXIT STATUS
+SQLite cache database on Linux.
 .TP
-.B 0
-Success.
-.TP
-.B >0
-An error occurred.
+.I ~/Library/Caches/clack/cache.db
+SQLite cache database on macOS.
 .SH EXAMPLES
 .TP
-Basic usage:
-.RS
-.nf
-clack users list
-clack users info U1234ABCD
-clack conversations history #general --limit 20
-.fi
-.RE
+List all users:
+.B clack users list
+.TP
+Get channel history:
+.B clack conversations history #general \-\-limit 50
+.TP
+Search messages from a user:
+.B clack search messages "deploy" \-\-from alice \-\-after 2026-01-01
+.TP
+View a Slack message by URL:
+.B clack https://myworkspace.slack.com/archives/C08A6HHTC1F/p1770234618715029
+.TP
+List cached users:
+.B clack cache list users
+.TP
+Show a specific cached user:
+.B clack cache show users U123ABC
+.TP
+Stream new messages matching a query:
+.B clack stream search messages "urgent"
+.TP
+Listen to real-time events:
+.B clack events listen \-\-channel general
+.TP
+Post a message:
+.B clack chat post #general "Hello, world!"
+.TP
+Post a message to a thread:
+.B clack chat post #general "Reply" \-\-thread\-ts 1234567890.123456
+.TP
+Read message from stdin:
+.B echo "Message from pipe" | clack chat post #general \-
 .TP
 Most recent 5 root (non-reply) messages in a channel:
 .RS
 .nf
-clack conversations history #general --limit 50 --format json \\
+clack conversations history #general \-\-limit 50 \-\-format json \\
   | jq 'map(select(.thread_ts == null or .thread_ts == .ts)) | .[0:5]'
 .fi
 .RE
@@ -90,10 +221,20 @@ clack conversations history #general --limit 50 --format json \\
 Count messages for a user in the last 24 hours:
 .RS
 .nf
-SINCE=$(date -u -d '24 hours ago' +%Y-%m-%d 2>/dev/null || date -u -v-1d +%Y-%m-%d)
-clack search messages "in:#general" --from @alice --after "$SINCE" --format json \\
+SINCE=$(date \-u \-d '24 hours ago' +%Y\-%m\-%d 2>/dev/null || date \-u \-v\-1d +%Y\-%m\-%d)
+clack search messages "in:#general" \-\-from @alice \-\-after "$SINCE" \-\-format json \\
   | jq '.messages.matches | length'
 .fi
 .RE
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B >0
+An error occurred.
 .SH SEE ALSO
-\fICLI.md\fR
+.I CLI.md
+in the clack repository for additional documentation.
+.SH AUTHORS
+Written by the clack contributors.
