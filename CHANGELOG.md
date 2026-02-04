@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/timcour/clack/compare/v1.2.0...v1.3.0) (2026-02-04)
+
+
+### Features
+
+* **events:** support event streaming ([697d653](https://github.com/timcour/clack/commit/697d6532836edd6394b68259abad1c3c91e3a635))
+
 # [1.2.0](https://github.com/timcour/clack/compare/v1.1.1...v1.2.0) (2026-01-30)
 
 
