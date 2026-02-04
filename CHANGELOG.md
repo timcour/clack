@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/timcour/clack/compare/v1.3.0...v1.3.1) (2026-02-04)
+
+
+### Bug Fixes
+
+* **loose-ends:** compiler warnings; progressive output; cache inspection ([#4](https://github.com/timcour/clack/issues/4)) ([31b8a56](https://github.com/timcour/clack/commit/31b8a56b1daf9317d3578e36e05219c3f91d46b7))
+
 # [1.3.0](https://github.com/timcour/clack/compare/v1.2.0...v1.3.0) (2026-02-04)
 
 
