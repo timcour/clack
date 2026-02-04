@@ -13,6 +13,9 @@ pub async fn search_messages(
 ) -> Result<SearchMessagesResponse> {
     let mut params = vec![("query", query.to_string())];
 
+    params.push(("sort", "timestamp".to_string()));
+    params.push(("sort_dir", "desc".to_string()));
+
     if let Some(c) = count {
         params.push(("count", c.to_string()));
     }
@@ -38,6 +41,9 @@ pub async fn search_files(
 ) -> Result<SearchFilesResponse> {
     let mut params = vec![("query", query.to_string())];
 
+    params.push(("sort", "timestamp".to_string()));
+    params.push(("sort_dir", "desc".to_string()));
+
     if let Some(c) = count {
         params.push(("count", c.to_string()));
     }
@@ -62,6 +68,9 @@ pub async fn search_all(
     page: Option<u32>,
 ) -> Result<SearchAllResponse> {
     let mut params = vec![("query", query.to_string())];
+
+    params.push(("sort", "timestamp".to_string()));
+    params.push(("sort_dir", "desc".to_string()));
 
     if let Some(c) = count {
         params.push(("count", c.to_string()));
