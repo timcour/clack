@@ -22,24 +22,29 @@ struct ConnectionOpenResponse {
 pub struct HelloMessage {
     #[serde(rename = "type")]
     pub msg_type: String,
+    #[allow(dead_code)]
     pub num_connections: Option<u32>,
     pub debug_info: Option<DebugInfo>,
+    #[allow(dead_code)]
     pub connection_info: Option<ConnectionInfo>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct DebugInfo {
+    #[allow(dead_code)]
     pub host: Option<String>,
     pub approximate_connection_time: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct ConnectionInfo {
     pub app_id: Option<String>,
 }
 
 /// Disconnect message
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct DisconnectMessage {
     #[serde(rename = "type")]
     pub msg_type: String,
@@ -53,8 +58,11 @@ pub struct SocketEnvelope {
     pub envelope_id: String,
     #[serde(rename = "type")]
     pub envelope_type: String,
+    #[allow(dead_code)]
     pub accepts_response_payload: Option<bool>,
+    #[allow(dead_code)]
     pub retry_attempt: Option<u32>,
+    #[allow(dead_code)]
     pub retry_reason: Option<String>,
     pub payload: Option<serde_json::Value>,
 }

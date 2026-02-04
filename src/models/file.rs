@@ -27,6 +27,7 @@ pub struct File {
 pub struct FilesListResponse {
     pub ok: bool,
     pub files: Vec<File>,
+    #[allow(dead_code)]
     pub paging: Option<Paging>,
     pub error: Option<String>,
 }
@@ -39,6 +40,7 @@ pub struct FileInfoResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct Paging {
     pub count: u32,
     pub total: u32,

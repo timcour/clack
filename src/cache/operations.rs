@@ -13,6 +13,7 @@ use crate::models::user::User;
 // TTL constants (in seconds)
 const USER_TTL_SECONDS: i64 = 3600 * 24 * 7; // 1 week
 const CONVERSATION_TTL_SECONDS: i64 = 3600 * 24 * 7; // 1 week
+#[allow(dead_code)]
 const MESSAGE_TTL_SECONDS: i64 = 3600 * 24 * 7; // 1 week
 
 /// Check if a cached item is fresh based on TTL
@@ -75,6 +76,7 @@ pub fn get_user(
 /// # Arguments
 /// * `ttl_override` - Optional TTL in seconds. If provided, overrides the default TTL.
 ///   Use `Some(i64::MAX)` to effectively ignore staleness and return any cached records.
+#[allow(dead_code)]
 pub fn get_users(
     conn: &mut CacheConnection,
     ws_id: &str,
@@ -333,6 +335,7 @@ pub fn get_conversation_by_name(
 /// # Arguments
 /// * `ttl_override` - Optional TTL in seconds. If provided, overrides the default TTL.
 ///   Use `Some(i64::MAX)` to effectively ignore staleness and return any cached records.
+#[allow(dead_code)]
 pub fn get_conversations(
     conn: &mut CacheConnection,
     ws_id: &str,
@@ -429,6 +432,7 @@ pub fn upsert_conversations(
 
 // Message operations
 
+#[allow(dead_code)]
 pub fn get_messages(
     conn: &mut CacheConnection,
     ws_id: &str,
@@ -500,6 +504,7 @@ pub fn upsert_messages(
 
 // Cache clearing operations
 
+#[allow(dead_code)]
 pub fn clear_workspace_cache(
     conn: &mut CacheConnection,
     workspace_id: &str,
@@ -522,6 +527,7 @@ pub fn clear_workspace_cache(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn clear_all_cache(conn: &mut CacheConnection, verbose: bool) -> Result<()> {
     use super::schema::{conversations, messages, users};
 
@@ -595,6 +601,168 @@ pub fn get_cached_events(
     }
 
     Ok(results)
+}
+
+// Cache listing operations (for `clack cache list` command)
+
+/// List all users from cache (for cache list command)
+/// Returns raw cached records sorted by cached_at descending
+pub fn list_cached_users(
+    conn: &mut CacheConnection,
+    ws_id: &str,
+    limit: i64,
+    verbose: bool,
+) -> Result<Vec<CachedUser>> {
+    use super::schema::users::dsl::*;
+
+    let results = users
+        .filter(workspace_id.eq(ws_id))
+        .filter(deleted_at.is_null())
+        .order(cached_at.desc())
+        .limit(limit)
+        .load(conn)?;
+
+    if verbose {
+        eprintln!("[CACHE] Listed {} users", results.len());
+    }
+
+    Ok(results)
+}
+
+/// List all conversations from cache (for cache list command)
+pub fn list_cached_conversations(
+    conn: &mut CacheConnection,
+    ws_id: &str,
+    limit: i64,
+    verbose: bool,
+) -> Result<Vec<CachedConversation>> {
+    use super::schema::conversations::dsl::*;
+
+    let results = conversations
+        .filter(workspace_id.eq(ws_id))
+        .filter(deleted_at.is_null())
+        .order(cached_at.desc())
+        .limit(limit)
+        .load(conn)?;
+
+    if verbose {
+        eprintln!("[CACHE] Listed {} conversations", results.len());
+    }
+
+    Ok(results)
+}
+
+/// List all messages from cache (for cache list command)
+pub fn list_cached_messages(
+    conn: &mut CacheConnection,
+    ws_id: &str,
+    limit: i64,
+    verbose: bool,
+) -> Result<Vec<CachedMessage>> {
+    use super::schema::messages::dsl::*;
+
+    let results = messages
+        .filter(workspace_id.eq(ws_id))
+        .filter(deleted_at.is_null())
+        .order(cached_at.desc())
+        .limit(limit)
+        .load(conn)?;
+
+    if verbose {
+        eprintln!("[CACHE] Listed {} messages", results.len());
+    }
+
+    Ok(results)
+}
+
+/// List all events from cache (for cache list command)
+pub fn list_cached_events(
+    conn: &mut CacheConnection,
+    ws_id: &str,
+    limit: i64,
+    verbose: bool,
+) -> Result<Vec<CachedEvent>> {
+    use super::schema::events::dsl::*;
+
+    let results = events
+        .filter(workspace_id.eq(ws_id))
+        .order(cached_at.desc())
+        .limit(limit)
+        .load(conn)?;
+
+    if verbose {
+        eprintln!("[CACHE] Listed {} events", results.len());
+    }
+
+    Ok(results)
+}
+
+// Cache show operations (for `clack cache show` command)
+
+/// Get a specific user by ID from cache
+pub fn get_cached_user_by_id(
+    conn: &mut CacheConnection,
+    ws_id: &str,
+    user_id: &str,
+) -> Result<Option<CachedUser>> {
+    use super::schema::users::dsl::*;
+
+    users
+        .filter(id.eq(user_id))
+        .filter(workspace_id.eq(ws_id))
+        .first(conn)
+        .optional()
+        .map_err(|e| anyhow::anyhow!("Database error: {}", e))
+}
+
+/// Get a specific conversation by ID from cache
+pub fn get_cached_conversation_by_id(
+    conn: &mut CacheConnection,
+    ws_id: &str,
+    conv_id: &str,
+) -> Result<Option<CachedConversation>> {
+    use super::schema::conversations::dsl::*;
+
+    conversations
+        .filter(id.eq(conv_id))
+        .filter(workspace_id.eq(ws_id))
+        .first(conn)
+        .optional()
+        .map_err(|e| anyhow::anyhow!("Database error: {}", e))
+}
+
+/// Get a specific message by conversation_id and ts from cache
+pub fn get_cached_message_by_id(
+    conn: &mut CacheConnection,
+    ws_id: &str,
+    conv_id: &str,
+    msg_ts: &str,
+) -> Result<Option<CachedMessage>> {
+    use super::schema::messages::dsl::*;
+
+    messages
+        .filter(conversation_id.eq(conv_id))
+        .filter(workspace_id.eq(ws_id))
+        .filter(ts.eq(msg_ts))
+        .first(conn)
+        .optional()
+        .map_err(|e| anyhow::anyhow!("Database error: {}", e))
+}
+
+/// Get a specific event by event_id from cache
+pub fn get_cached_event_by_id(
+    conn: &mut CacheConnection,
+    ws_id: &str,
+    evt_id: &str,
+) -> Result<Option<CachedEvent>> {
+    use super::schema::events::dsl::*;
+
+    events
+        .filter(event_id.eq(evt_id))
+        .filter(workspace_id.eq(ws_id))
+        .first(conn)
+        .optional()
+        .map_err(|e| anyhow::anyhow!("Database error: {}", e))
 }
 
 #[cfg(test)]

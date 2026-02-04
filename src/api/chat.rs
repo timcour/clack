@@ -5,13 +5,16 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 struct ChatPostResponse {
     ok: bool,
+    #[allow(dead_code)]
     channel: Option<String>,
     ts: Option<String>,
+    #[allow(dead_code)]
     message: Option<PostedMessage>,
     error: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct PostedMessage {
     text: String,
     user: String,

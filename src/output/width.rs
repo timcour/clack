@@ -20,6 +20,7 @@ pub fn get_wrap_width() -> usize {
 
 /// Get wrap width for indented text (e.g., threaded replies)
 /// - Accounts for indentation level
+#[allow(dead_code)]
 pub fn get_wrap_width_with_indent(indent_size: usize) -> usize {
     get_wrap_width().saturating_sub(indent_size)
 }

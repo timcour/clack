@@ -94,6 +94,17 @@ pub enum Commands {
         #[command(subcommand)]
         command: EventsCommands,
     },
+    /// Inspect the local cache database
+    Cache {
+        #[command(subcommand)]
+        command: CacheCommands,
+    },
+    /// Open a Slack URL directly (hidden from help, used via argument detection)
+    #[command(hide = true)]
+    Open {
+        /// Slack URL to open
+        url: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -449,6 +460,27 @@ pub enum EventsCommands {
         /// Maximum number of events to return
         #[arg(long, default_value = "50")]
         limit: i64,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum CacheCommands {
+    /// List cached records from a table (reverse chronological order)
+    List {
+        /// Table name: users, conversations, messages, events
+        table: String,
+
+        /// Maximum number of records to return
+        #[arg(long, default_value = "16")]
+        limit: i64,
+    },
+    /// Show a specific cached record by its primary key
+    Show {
+        /// Table name: users, conversations, messages, events
+        table: String,
+
+        /// Primary key ID (format depends on table: USER_ID, CHANNEL_ID, CHANNEL_ID:TIMESTAMP, EVENT_ID)
+        id: String,
     },
 }
 

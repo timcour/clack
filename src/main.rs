@@ -5,18 +5,31 @@ mod models;
 mod output;
 mod socket;
 mod stream;
+mod url_parser;
 
 use anyhow::Result;
 use clap::Parser;
 use cli::{
-    AuthType, ChatCommands, Cli, Commands, ConversationsCommands, EventsCommands, FilesCommands,
-    PinsCommands, ProfileCommands, ReactionsCommands, SearchType, StreamSearchType, StreamType,
-    UsersCommands,
+    AuthType, CacheCommands, ChatCommands, Cli, Commands, ConversationsCommands, EventsCommands,
+    FilesCommands, PinsCommands, ProfileCommands, ReactionsCommands, SearchType, StreamSearchType,
+    StreamType, UsersCommands,
 };
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let cli = Cli::parse();
+    // Check if first arg is a Slack URL and insert "open" subcommand if so
+    let args: Vec<String> = std::env::args().collect();
+    let cli = if args.len() >= 2
+        && args[1].starts_with("https://")
+        && args[1].contains(".slack.com/")
+    {
+        // Insert "open" subcommand before the URL
+        let mut new_args = vec![args[0].clone(), "open".to_string()];
+        new_args.extend(args[1..].iter().cloned());
+        Cli::parse_from(new_args)
+    } else {
+        Cli::parse()
+    };
 
     // Create API client with verbose, debug_response, and refresh_cache flags
     let mut client =
@@ -37,13 +50,49 @@ async fn main() -> Result<()> {
             } => {
                 let users = api::users::list_users(&client, limit, include_deleted).await?;
 
-                final_output = match cli.format.as_str() {
-                    "json" => serde_json::to_string_pretty(&users)?,
-                    "yaml" => serde_yaml::to_string(&users)?,
+                match cli.format.as_str() {
+                    "json" => final_output = serde_json::to_string_pretty(&users)?,
+                    "yaml" => final_output = serde_yaml::to_string(&users)?,
                     _ => {
+                        // Progressive output: print directly to stdout
+                        use std::io::Write;
                         let mut writer = output::color::ColorWriter::new(cli.no_color);
-                        output::user_formatter::format_users_list(&users, &mut writer)?;
-                        writer.into_string()?
+
+                        // Print header
+                        writer.print_header(&format!("Users ({})", users.len()))?;
+                        writer.print_separator()?;
+                        print!("{}", writer.into_string()?);
+                        std::io::stdout().flush()?;
+
+                        // Print each user progressively
+                        for (i, user) in users.iter().enumerate() {
+                            let mut writer = output::color::ColorWriter::new(cli.no_color);
+                            writer.write("@")?;
+                            writer.print_bold(&user.name)?;
+                            writer.write(" ")?;
+                            writer.print_colored(
+                                &format!("({})", user.id),
+                                termcolor::Color::Yellow,
+                            )?;
+                            if let Some(real_name) = &user.real_name {
+                                writer.write(&format!(" ({})", real_name))?;
+                            }
+                            if let Some(emoji) = &user.profile.status_emoji {
+                                writer.write(&format!(" {}", emoji))?;
+                            }
+                            writer.writeln()?;
+                            if let Some(email) = &user.profile.email {
+                                writer.write("  ")?;
+                                writer.print_colored("✉", termcolor::Color::Blue)?;
+                                writer.write(&format!(" {}", email))?;
+                                writer.writeln()?;
+                            }
+                            if i < users.len() - 1 {
+                                writer.writeln()?;
+                            }
+                            print!("{}", writer.into_string()?);
+                            std::io::stdout().flush()?;
+                        }
                     }
                 };
             }
@@ -84,13 +133,67 @@ async fn main() -> Result<()> {
                 let channels =
                     api::channels::list_channels(&client, include_archived, limit).await?;
 
-                final_output = match cli.format.as_str() {
-                    "json" => serde_json::to_string_pretty(&channels)?,
-                    "yaml" => serde_yaml::to_string(&channels)?,
+                match cli.format.as_str() {
+                    "json" => final_output = serde_json::to_string_pretty(&channels)?,
+                    "yaml" => final_output = serde_yaml::to_string(&channels)?,
                     _ => {
+                        // Progressive output: print directly to stdout
+                        use std::io::Write;
+
+                        // Print header
                         let mut writer = output::color::ColorWriter::new(cli.no_color);
-                        output::channel_formatter::format_channels_list(&channels, &mut writer)?;
-                        writer.into_string()?
+                        writer.print_header(&format!("Channels ({})", channels.len()))?;
+                        writer.print_separator()?;
+                        print!("{}", writer.into_string()?);
+                        std::io::stdout().flush()?;
+
+                        // Sort channels by name
+                        let mut sorted_channels = channels.to_vec();
+                        sorted_channels.sort_by(|a, b| a.name.cmp(&b.name));
+
+                        // Print each channel progressively
+                        for (i, channel) in sorted_channels.iter().enumerate() {
+                            let mut writer = output::color::ColorWriter::new(cli.no_color);
+                            writer.print_colored(
+                                &format!("#{}", channel.name),
+                                termcolor::Color::Cyan,
+                            )?;
+                            writer.write(" ")?;
+                            writer.print_colored(
+                                &format!("({})", channel.id),
+                                termcolor::Color::Yellow,
+                            )?;
+                            if channel.is_private == Some(true) {
+                                writer.write(" ")?;
+                                writer.print_colored("🔒 Private", termcolor::Color::Blue)?;
+                            }
+                            if channel.is_archived == Some(true) {
+                                writer.write(" ")?;
+                                writer.print_colored("📦 Archived", termcolor::Color::White)?;
+                            }
+                            writer.writeln()?;
+                            if let Some(topic) = &channel.topic {
+                                if !topic.value.is_empty() {
+                                    writer.write("  ")?;
+                                    writer.print_colored("Topic: ", termcolor::Color::Blue)?;
+                                    writer.write(&topic.value)?;
+                                    writer.writeln()?;
+                                }
+                            }
+                            if let Some(num_members) = channel.num_members {
+                                writer.write("  ")?;
+                                writer.print_colored(
+                                    &format!("{} members", num_members),
+                                    termcolor::Color::Green,
+                                )?;
+                                writer.writeln()?;
+                            }
+                            if i < sorted_channels.len() - 1 {
+                                writer.writeln()?;
+                            }
+                            print!("{}", writer.into_string()?);
+                            std::io::stdout().flush()?;
+                        }
                     }
                 }
             }
@@ -126,74 +229,98 @@ async fn main() -> Result<()> {
                     api::messages::list_messages(&client, &channel_id, limit, latest, oldest)
                         .await?;
 
-                final_output = match cli.format.as_str() {
-                    "json" => serde_json::to_string_pretty(&messages)?,
-                    "yaml" => serde_yaml::to_string(&messages)?,
+                match cli.format.as_str() {
+                    "json" => final_output = serde_json::to_string_pretty(&messages)?,
+                    "yaml" => final_output = serde_yaml::to_string(&messages)?,
                     _ => {
+                        // Progressive output: print directly to stdout
+                        use std::io::Write;
+
                         // Fetch channel info for metadata
                         let channel_info = api::channels::get_channel(&client, &channel_id).await?;
 
-                        // Build user lookup map - only fetch users mentioned in messages
+                        // Print channel header immediately
+                        let mut header_writer = output::color::ColorWriter::new(cli.no_color);
+                        output::message_formatter::format_channel_header(
+                            &channel_info,
+                            &mut header_writer,
+                        )?;
+                        print!("{}", header_writer.into_string()?);
+                        println!("Messages ({})", messages.len());
+                        println!("{}", "-".repeat(40));
+                        std::io::stdout().flush()?;
+
+                        // Build user lookup map progressively
                         let mut user_map: std::collections::HashMap<String, models::user::User> =
                             std::collections::HashMap::new();
 
-                        for message in &messages {
-                            if let Some(user_id) = &message.user {
-                                if !user_map.contains_key(user_id) {
-                                    // Fetch individual user (cache-first)
-                                    if let Ok(user) = api::users::get_user(&client, user_id).await {
-                                        user_map.insert(user.id.clone(), user);
-                                    }
-                                }
-                            }
-                        }
-
-                        // Build thread metadata map
+                        // Build thread metadata map progressively
                         let mut thread_info: std::collections::HashMap<
                             String,
                             (usize, Vec<String>),
                         > = std::collections::HashMap::new();
 
-                        // Identify unique threads
-                        let thread_timestamps: std::collections::HashSet<&String> = messages
-                            .iter()
-                            .filter_map(|m| m.thread_ts.as_ref())
-                            .collect();
-
-                        // Fetch metadata for each thread
-                        for thread_ts in thread_timestamps {
-                            if let Ok(thread_messages) =
-                                api::messages::get_thread(&client, &channel_id, thread_ts).await
-                            {
-                                let (reply_count, participant_ids) =
-                                    api::messages::get_thread_metadata(&thread_messages);
-                                thread_info.insert(
-                                    thread_ts.clone(),
-                                    (reply_count, participant_ids.clone()),
-                                );
-
-                                // Also add participants to user_map
-                                for user_id in &participant_ids {
-                                    if !user_map.contains_key(user_id) {
-                                        if let Ok(user) =
-                                            api::users::get_user(&client, user_id).await
-                                        {
-                                            user_map.insert(user.id.clone(), user);
-                                        }
+                        // Process and print each message progressively
+                        for (i, msg) in messages.iter().enumerate() {
+                            // Fetch user if not already cached
+                            if let Some(user_id) = &msg.user {
+                                if !user_map.contains_key(user_id) {
+                                    if let Ok(user) = api::users::get_user(&client, user_id).await {
+                                        user_map.insert(user.id.clone(), user);
                                     }
                                 }
                             }
+
+                            // Fetch thread info if this message is part of a thread
+                            if let Some(thread_ts) = &msg.thread_ts {
+                                if !thread_info.contains_key(thread_ts) {
+                                    if let Ok(thread_messages) =
+                                        api::messages::get_thread(&client, &channel_id, thread_ts)
+                                            .await
+                                    {
+                                        let (reply_count, participant_ids) =
+                                            api::messages::get_thread_metadata(&thread_messages);
+
+                                        // Fetch participants
+                                        for user_id in &participant_ids {
+                                            if !user_map.contains_key(user_id) {
+                                                if let Ok(user) =
+                                                    api::users::get_user(&client, user_id).await
+                                                {
+                                                    user_map.insert(user.id.clone(), user);
+                                                }
+                                            }
+                                        }
+
+                                        thread_info.insert(
+                                            thread_ts.clone(),
+                                            (reply_count, participant_ids),
+                                        );
+                                    }
+                                }
+                            }
+
+                            // Format and print this message immediately
+                            let mut msg_writer = output::color::ColorWriter::new(cli.no_color);
+                            output::message_formatter::format_single_message(
+                                msg,
+                                &channel_info.name,
+                                &channel_info.id,
+                                &user_map,
+                                &thread_info,
+                                &mut msg_writer,
+                            )?;
+                            print!("{}", msg_writer.into_string()?);
+
+                            // Add spacing between messages
+                            if i < messages.len() - 1 {
+                                println!();
+                            }
+                            std::io::stdout().flush()?;
                         }
 
-                        let mut writer = output::color::ColorWriter::new(cli.no_color);
-                        output::message_formatter::format_messages_with_thread_info(
-                            &messages,
-                            &channel_info,
-                            &user_map,
-                            &thread_info,
-                            &mut writer,
-                        )?;
-                        writer.into_string()?
+                        // Skip pager for progressive output
+                        return Ok(());
                     }
                 };
             }
@@ -334,27 +461,63 @@ async fn main() -> Result<()> {
                     "json" => final_output = serde_json::to_string_pretty(&response)?,
                     "yaml" => final_output = serde_yaml::to_string(&response)?,
                     _ => {
-                        // Build user lookup map from search results
+                        // Progressive output: print directly to stdout
+                        use std::io::Write;
+
+                        // Print header immediately
+                        let mut header_writer = output::color::ColorWriter::new(cli.no_color);
+                        output::search_formatter::format_search_messages_header(
+                            &response.query,
+                            response.messages.total,
+                            &mut header_writer,
+                        )?;
+                        print!("{}", header_writer.into_string()?);
+                        std::io::stdout().flush()?;
+
+                        // Build user lookup map progressively
                         let mut user_map: std::collections::HashMap<String, models::user::User> =
                             std::collections::HashMap::new();
 
-                        for message in &response.messages.matches {
-                            if let Some(user_id) = &message.user {
+                        // Process and print each message progressively
+                        for (i, msg) in response.messages.matches.iter().enumerate() {
+                            // Fetch user if not already cached
+                            if let Some(user_id) = &msg.user {
                                 if !user_map.contains_key(user_id) {
                                     if let Ok(user) = api::users::get_user(&client, user_id).await {
                                         user_map.insert(user.id.clone(), user);
                                     }
                                 }
                             }
+
+                            // Format and print this message immediately
+                            let mut msg_writer = output::color::ColorWriter::new(cli.no_color);
+                            output::search_formatter::format_search_message(
+                                msg,
+                                &user_map,
+                                &mut msg_writer,
+                            )?;
+                            print!("{}", msg_writer.into_string()?);
+
+                            // Add spacing between messages
+                            if i < response.messages.matches.len() - 1 {
+                                println!();
+                            }
+                            std::io::stdout().flush()?;
                         }
 
-                        let mut writer = output::color::ColorWriter::new(cli.no_color);
-                        output::search_formatter::format_search_messages(
-                            &response,
-                            &user_map,
-                            &mut writer,
-                        )?;
-                        final_output = writer.into_string()?;
+                        // Print pagination if available
+                        if let Some(ref pagination) = response.messages.pagination {
+                            let mut pag_writer = output::color::ColorWriter::new(cli.no_color);
+                            output::search_formatter::format_search_pagination(
+                                pagination,
+                                &mut pag_writer,
+                            )?;
+                            print!("{}", pag_writer.into_string()?);
+                            std::io::stdout().flush()?;
+                        }
+
+                        // Skip pager for progressive output
+                        return Ok(());
                     }
                 }
             }
@@ -414,9 +577,45 @@ async fn main() -> Result<()> {
                     "json" => final_output = serde_json::to_string_pretty(&response)?,
                     "yaml" => final_output = serde_yaml::to_string(&response)?,
                     _ => {
-                        let mut writer = output::color::ColorWriter::new(cli.no_color);
-                        output::search_formatter::format_search_files(&response, &mut writer)?;
-                        final_output = writer.into_string()?;
+                        // Progressive output: print directly to stdout
+                        use std::io::Write;
+
+                        // Print header immediately
+                        let mut header_writer = output::color::ColorWriter::new(cli.no_color);
+                        output::search_formatter::format_search_files_header(
+                            &response.query,
+                            response.files.total,
+                            &mut header_writer,
+                        )?;
+                        print!("{}", header_writer.into_string()?);
+                        std::io::stdout().flush()?;
+
+                        // Process and print each file progressively
+                        for (i, file) in response.files.matches.iter().enumerate() {
+                            let mut file_writer = output::color::ColorWriter::new(cli.no_color);
+                            output::search_formatter::format_single_file(file, &mut file_writer)?;
+                            print!("{}", file_writer.into_string()?);
+
+                            // Add spacing between files
+                            if i < response.files.matches.len() - 1 {
+                                println!();
+                            }
+                            std::io::stdout().flush()?;
+                        }
+
+                        // Print pagination if available
+                        if let Some(ref pagination) = response.files.pagination {
+                            let mut pag_writer = output::color::ColorWriter::new(cli.no_color);
+                            output::search_formatter::format_search_pagination(
+                                pagination,
+                                &mut pag_writer,
+                            )?;
+                            print!("{}", pag_writer.into_string()?);
+                            std::io::stdout().flush()?;
+                        }
+
+                        // Skip pager for progressive output
+                        return Ok(());
                     }
                 }
             }
@@ -456,27 +655,105 @@ async fn main() -> Result<()> {
                     "json" => final_output = serde_json::to_string_pretty(&response)?,
                     "yaml" => final_output = serde_yaml::to_string(&response)?,
                     _ => {
-                        // Build user lookup map from search results
+                        // Progressive output: print directly to stdout
+                        use std::io::Write;
+
+                        // Print header immediately
+                        let mut header_writer = output::color::ColorWriter::new(cli.no_color);
+                        header_writer.print_header(&format!("Search results for '{}'", response.query))?;
+                        header_writer.print_separator()?;
+                        print!("{}", header_writer.into_string()?);
+                        std::io::stdout().flush()?;
+
+                        // Build user lookup map progressively
                         let mut user_map: std::collections::HashMap<String, models::user::User> =
                             std::collections::HashMap::new();
 
-                        for message in &response.messages.matches {
-                            if let Some(user_id) = &message.user {
-                                if !user_map.contains_key(user_id) {
-                                    if let Ok(user) = api::users::get_user(&client, user_id).await {
-                                        user_map.insert(user.id.clone(), user);
+                        // Messages section
+                        if response.messages.total > 0 {
+                            println!("{} Message{}:", response.messages.total,
+                                if response.messages.total == 1 { "" } else { "s" });
+                            println!("{}", "-".repeat(40));
+                            std::io::stdout().flush()?;
+
+                            for (i, msg) in response.messages.matches.iter().enumerate() {
+                                // Fetch user if not already cached
+                                if let Some(user_id) = &msg.user {
+                                    if !user_map.contains_key(user_id) {
+                                        if let Ok(user) = api::users::get_user(&client, user_id).await {
+                                            user_map.insert(user.id.clone(), user);
+                                        }
                                     }
                                 }
+
+                                // Format and print this message immediately
+                                let mut msg_writer = output::color::ColorWriter::new(cli.no_color);
+                                output::search_formatter::format_search_message(
+                                    msg,
+                                    &user_map,
+                                    &mut msg_writer,
+                                )?;
+                                print!("{}", msg_writer.into_string()?);
+
+                                if i < response.messages.matches.len() - 1 {
+                                    println!();
+                                }
+                                std::io::stdout().flush()?;
+                            }
+
+                            // Print pagination if available
+                            if let Some(ref pagination) = response.messages.pagination {
+                                let mut pag_writer = output::color::ColorWriter::new(cli.no_color);
+                                output::search_formatter::format_search_pagination(
+                                    pagination,
+                                    &mut pag_writer,
+                                )?;
+                                print!("{}", pag_writer.into_string()?);
+                                std::io::stdout().flush()?;
                             }
                         }
 
-                        let mut writer = output::color::ColorWriter::new(cli.no_color);
-                        output::search_formatter::format_search_all(
-                            &response,
-                            &user_map,
-                            &mut writer,
-                        )?;
-                        final_output = writer.into_string()?;
+                        // Files section
+                        if response.files.total > 0 {
+                            if response.messages.total > 0 {
+                                println!();
+                                println!("{}", "-".repeat(40));
+                            }
+                            println!("{} File{}:", response.files.total,
+                                if response.files.total == 1 { "" } else { "s" });
+                            println!("{}", "-".repeat(40));
+                            std::io::stdout().flush()?;
+
+                            for (i, file) in response.files.matches.iter().enumerate() {
+                                let mut file_writer = output::color::ColorWriter::new(cli.no_color);
+                                output::search_formatter::format_single_file(file, &mut file_writer)?;
+                                print!("{}", file_writer.into_string()?);
+
+                                if i < response.files.matches.len() - 1 {
+                                    println!();
+                                }
+                                std::io::stdout().flush()?;
+                            }
+
+                            // Print pagination if available
+                            if let Some(ref pagination) = response.files.pagination {
+                                let mut pag_writer = output::color::ColorWriter::new(cli.no_color);
+                                output::search_formatter::format_search_pagination(
+                                    pagination,
+                                    &mut pag_writer,
+                                )?;
+                                print!("{}", pag_writer.into_string()?);
+                                std::io::stdout().flush()?;
+                            }
+                        }
+
+                        if response.messages.total == 0 && response.files.total == 0 {
+                            println!();
+                            println!("No results found.");
+                        }
+
+                        // Skip pager for progressive output
+                        return Ok(());
                     }
                 }
             }
@@ -867,6 +1144,497 @@ async fn main() -> Result<()> {
                         }
                     }
                 }
+            }
+        }
+        Commands::Cache { command } => {
+            use anyhow::Context;
+
+            let pool = client
+                .cache_pool()
+                .ok_or_else(|| anyhow::anyhow!("Cache not available"))?;
+            let mut conn = cache::db::get_connection(pool).await?;
+            let workspace_id = client.workspace_id().context("Workspace ID not initialized")?;
+
+            match command {
+                CacheCommands::List { table, limit } => {
+                    match table.to_lowercase().as_str() {
+                        "users" => {
+                            let records = cache::operations::list_cached_users(
+                                &mut conn,
+                                workspace_id,
+                                limit,
+                                cli.verbose,
+                            )?;
+
+                            if records.is_empty() {
+                                eprintln!("No cached users found.");
+                            } else {
+                                match cli.format.as_str() {
+                                    "json" => {
+                                        // Collect all users into an array
+                                        let users: Vec<serde_json::Value> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_object).ok())
+                                            .collect();
+                                        final_output = serde_json::to_string_pretty(&users)?;
+                                    }
+                                    "yaml" => {
+                                        let users: Vec<serde_json::Value> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_object).ok())
+                                            .collect();
+                                        final_output = serde_yaml::to_string(&users)?;
+                                    }
+                                    _ => {
+                                        // Human format - deserialize and use formatter
+                                        let users: Vec<models::user::User> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_object).ok())
+                                            .collect();
+                                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                                        writer.print_header(&format!("Cached Users ({} of {})", users.len(), records.len()))?;
+                                        writer.print_separator()?;
+                                        for (i, user) in users.iter().enumerate() {
+                                            output::user_formatter::format_user(user, &mut writer)?;
+                                            if i < users.len() - 1 {
+                                                writer.writeln()?;
+                                            }
+                                        }
+                                        final_output = writer.into_string()?;
+                                    }
+                                }
+                            }
+                        }
+                        "conversations" => {
+                            let records = cache::operations::list_cached_conversations(
+                                &mut conn,
+                                workspace_id,
+                                limit,
+                                cli.verbose,
+                            )?;
+
+                            if records.is_empty() {
+                                eprintln!("No cached conversations found.");
+                            } else {
+                                match cli.format.as_str() {
+                                    "json" => {
+                                        let channels: Vec<serde_json::Value> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_object).ok())
+                                            .collect();
+                                        final_output = serde_json::to_string_pretty(&channels)?;
+                                    }
+                                    "yaml" => {
+                                        let channels: Vec<serde_json::Value> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_object).ok())
+                                            .collect();
+                                        final_output = serde_yaml::to_string(&channels)?;
+                                    }
+                                    _ => {
+                                        // Human format - deserialize and use formatter
+                                        let channels: Vec<models::channel::Channel> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_object).ok())
+                                            .collect();
+                                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                                        writer.print_header(&format!("Cached Conversations ({} of {})", channels.len(), records.len()))?;
+                                        writer.print_separator()?;
+                                        output::channel_formatter::format_channels_list(&channels, &mut writer)?;
+                                        final_output = writer.into_string()?;
+                                    }
+                                }
+                            }
+                        }
+                        "messages" => {
+                            let records = cache::operations::list_cached_messages(
+                                &mut conn,
+                                workspace_id,
+                                limit,
+                                cli.verbose,
+                            )?;
+
+                            if records.is_empty() {
+                                eprintln!("No cached messages found.");
+                            } else {
+                                match cli.format.as_str() {
+                                    "json" => {
+                                        let messages: Vec<serde_json::Value> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_object).ok())
+                                            .collect();
+                                        final_output = serde_json::to_string_pretty(&messages)?;
+                                    }
+                                    "yaml" => {
+                                        let messages: Vec<serde_json::Value> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_object).ok())
+                                            .collect();
+                                        final_output = serde_yaml::to_string(&messages)?;
+                                    }
+                                    _ => {
+                                        // Human format - use compact message format
+                                        let messages: Vec<models::message::Message> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_object).ok())
+                                            .collect();
+                                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                                        writer.print_header(&format!("Cached Messages ({} of {})", messages.len(), records.len()))?;
+                                        writer.print_separator()?;
+                                        let user_map = std::collections::HashMap::new();
+                                        for (i, msg) in messages.iter().enumerate() {
+                                            output::message_formatter::format_message_compact(msg, &user_map, &mut writer)?;
+                                            if i < messages.len() - 1 {
+                                                writer.writeln()?;
+                                            }
+                                        }
+                                        final_output = writer.into_string()?;
+                                    }
+                                }
+                            }
+                        }
+                        "events" => {
+                            let records = cache::operations::list_cached_events(
+                                &mut conn,
+                                workspace_id,
+                                limit,
+                                cli.verbose,
+                            )?;
+
+                            if records.is_empty() {
+                                eprintln!("No cached events found.");
+                            } else {
+                                match cli.format.as_str() {
+                                    "json" => {
+                                        let events: Vec<serde_json::Value> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_payload).ok())
+                                            .collect();
+                                        final_output = serde_json::to_string_pretty(&events)?;
+                                    }
+                                    "yaml" => {
+                                        let events: Vec<serde_json::Value> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_payload).ok())
+                                            .collect();
+                                        final_output = serde_yaml::to_string(&events)?;
+                                    }
+                                    _ => {
+                                        // Human format - show compact event info
+                                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                                        writer.print_header(&format!("Cached Events ({})", records.len()))?;
+                                        writer.print_separator()?;
+                                        for (i, record) in records.iter().enumerate() {
+                                            // Show event_id, type, channel, user, timestamp
+                                            writer.print_colored(&record.event_id, termcolor::Color::Yellow)?;
+                                            writer.write(" ")?;
+                                            writer.print_colored(&record.event_type, termcolor::Color::Cyan)?;
+                                            if let Some(ch) = &record.channel_id {
+                                                writer.write(&format!(" #{}", ch))?;
+                                            }
+                                            if let Some(u) = &record.user_id {
+                                                writer.write(&format!(" @{}", u))?;
+                                            }
+                                            writer.writeln()?;
+                                            // Show text preview if available
+                                            if let Some(text) = &record.message_text {
+                                                let preview: String = text.chars().take(80).collect();
+                                                writer.write("  ")?;
+                                                writer.write(&preview)?;
+                                                if text.len() > 80 {
+                                                    writer.write("...")?;
+                                                }
+                                                writer.writeln()?;
+                                            }
+                                            if i < records.len() - 1 {
+                                                writer.writeln()?;
+                                            }
+                                        }
+                                        final_output = writer.into_string()?;
+                                    }
+                                }
+                            }
+                        }
+                        _ => {
+                            anyhow::bail!(
+                                "Unknown table '{}'. Valid tables: users, conversations, messages, events",
+                                table
+                            );
+                        }
+                    }
+                }
+                CacheCommands::Show { table, id } => match table.to_lowercase().as_str() {
+                    "users" => {
+                        let record = cache::operations::get_cached_user_by_id(
+                            &mut conn,
+                            workspace_id,
+                            &id,
+                        )?;
+
+                        match record {
+                            Some(r) => {
+                                match cli.format.as_str() {
+                                    "json" => {
+                                        final_output = r.full_object;
+                                    }
+                                    "yaml" => {
+                                        let user: serde_json::Value =
+                                            serde_json::from_str(&r.full_object)?;
+                                        final_output = serde_yaml::to_string(&user)?;
+                                    }
+                                    _ => {
+                                        // Human format
+                                        let user: models::user::User = serde_json::from_str(&r.full_object)?;
+                                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                                        output::user_formatter::format_user(&user, &mut writer)?;
+                                        final_output = writer.into_string()?;
+                                    }
+                                }
+                            }
+                            None => eprintln!("User '{}' not found in cache.", id),
+                        }
+                    }
+                    "conversations" => {
+                        let record = cache::operations::get_cached_conversation_by_id(
+                            &mut conn,
+                            workspace_id,
+                            &id,
+                        )?;
+
+                        match record {
+                            Some(r) => {
+                                match cli.format.as_str() {
+                                    "json" => {
+                                        final_output = r.full_object;
+                                    }
+                                    "yaml" => {
+                                        let conv: serde_json::Value =
+                                            serde_json::from_str(&r.full_object)?;
+                                        final_output = serde_yaml::to_string(&conv)?;
+                                    }
+                                    _ => {
+                                        // Human format
+                                        let channel: models::channel::Channel = serde_json::from_str(&r.full_object)?;
+                                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                                        output::channel_formatter::format_channels_list(&[channel], &mut writer)?;
+                                        final_output = writer.into_string()?;
+                                    }
+                                }
+                            }
+                            None => eprintln!("Conversation '{}' not found in cache.", id),
+                        }
+                    }
+                    "messages" => {
+                        // ID format: conversation_id:ts
+                        let parts: Vec<&str> = id.splitn(2, ':').collect();
+                        if parts.len() != 2 {
+                            anyhow::bail!(
+                                "Message ID must be in format 'CHANNEL_ID:TIMESTAMP' (e.g., 'C123:1234567890.123456')"
+                            );
+                        }
+
+                        let record = cache::operations::get_cached_message_by_id(
+                            &mut conn,
+                            workspace_id,
+                            parts[0],
+                            parts[1],
+                        )?;
+
+                        match record {
+                            Some(r) => {
+                                match cli.format.as_str() {
+                                    "json" => {
+                                        final_output = r.full_object;
+                                    }
+                                    "yaml" => {
+                                        let msg: serde_json::Value =
+                                            serde_json::from_str(&r.full_object)?;
+                                        final_output = serde_yaml::to_string(&msg)?;
+                                    }
+                                    _ => {
+                                        // Human format - use compact message format
+                                        let msg: models::message::Message = serde_json::from_str(&r.full_object)?;
+                                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                                        let user_map = std::collections::HashMap::new();
+                                        let thread_info = std::collections::HashMap::new();
+                                        output::message_formatter::format_single_message(
+                                            &msg,
+                                            parts[0], // channel_id
+                                            parts[0], // channel_name (use id as fallback)
+                                            &user_map,
+                                            &thread_info,
+                                            &mut writer,
+                                        )?;
+                                        final_output = writer.into_string()?;
+                                    }
+                                }
+                            }
+                            None => eprintln!("Message '{}' not found in cache.", id),
+                        }
+                    }
+                    "events" => {
+                        let record = cache::operations::get_cached_event_by_id(
+                            &mut conn,
+                            workspace_id,
+                            &id,
+                        )?;
+
+                        match record {
+                            Some(r) => {
+                                match cli.format.as_str() {
+                                    "json" => {
+                                        final_output = r.full_payload;
+                                    }
+                                    "yaml" => {
+                                        let event: serde_json::Value =
+                                            serde_json::from_str(&r.full_payload)?;
+                                        final_output = serde_yaml::to_string(&event)?;
+                                    }
+                                    _ => {
+                                        // Human format - show event details
+                                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                                        writer.print_header(&format!("Event: {}", r.event_id))?;
+                                        writer.print_separator()?;
+                                        writer.print_field("Type", &r.event_type)?;
+                                        if let Some(ch) = &r.channel_id {
+                                            writer.print_field("Channel", ch)?;
+                                        }
+                                        if let Some(u) = &r.user_id {
+                                            writer.print_field("User", u)?;
+                                        }
+                                        writer.print_field("Event Time", &r.event_time.to_string())?;
+                                        writer.print_field("Cached At", &r.cached_at.to_string())?;
+                                        if let Some(text) = &r.message_text {
+                                            writer.writeln()?;
+                                            writer.print_field("Text", text)?;
+                                        }
+                                        final_output = writer.into_string()?;
+                                    }
+                                }
+                            }
+                            None => eprintln!("Event '{}' not found in cache.", id),
+                        }
+                    }
+                    _ => {
+                        anyhow::bail!(
+                            "Unknown table '{}'. Valid tables: users, conversations, messages, events",
+                            table
+                        );
+                    }
+                },
+            }
+        }
+        Commands::Open { url } => {
+            let parsed = url_parser::SlackUrl::parse(&url)?;
+
+            // Get channel info
+            let channel = api::channels::get_channel(&client, &parsed.channel_id).await?;
+
+            if let Some(message_ts) = &parsed.message_ts {
+                // Fetch the specific message using inclusive timestamp range
+                let messages = api::messages::list_messages(
+                    &client,
+                    &parsed.channel_id,
+                    1,
+                    Some(message_ts.clone()),
+                    Some(message_ts.clone()),
+                )
+                .await?;
+
+                if messages.is_empty() {
+                    // Try fetching as thread parent
+                    let thread_messages =
+                        api::messages::get_thread(&client, &parsed.channel_id, message_ts).await?;
+
+                    if thread_messages.is_empty() {
+                        anyhow::bail!("Message not found: {}", message_ts);
+                    }
+
+                    // Render thread
+                    final_output = match cli.format.as_str() {
+                        "json" => serde_json::to_string_pretty(&thread_messages)?,
+                        "yaml" => serde_yaml::to_string(&thread_messages)?,
+                        _ => {
+                            // Build user map
+                            let mut user_map: std::collections::HashMap<
+                                String,
+                                models::user::User,
+                            > = std::collections::HashMap::new();
+                            for msg in &thread_messages {
+                                if let Some(user_id) = &msg.user {
+                                    if !user_map.contains_key(user_id) {
+                                        if let Ok(user) =
+                                            api::users::get_user(&client, user_id).await
+                                        {
+                                            user_map.insert(user.id.clone(), user);
+                                        }
+                                    }
+                                }
+                            }
+
+                            let mut writer = output::color::ColorWriter::new(cli.no_color);
+                            output::thread_formatter::format_thread(
+                                &thread_messages,
+                                &channel,
+                                &user_map,
+                                &mut writer,
+                            )?;
+                            writer.into_string()?
+                        }
+                    };
+                } else {
+                    // Render single message with context
+                    let message = &messages[0];
+
+                    final_output = match cli.format.as_str() {
+                        "json" => serde_json::to_string_pretty(&message)?,
+                        "yaml" => serde_yaml::to_string(&message)?,
+                        _ => {
+                            let mut user_map: std::collections::HashMap<
+                                String,
+                                models::user::User,
+                            > = std::collections::HashMap::new();
+                            if let Some(user_id) = &message.user {
+                                if let Ok(user) = api::users::get_user(&client, user_id).await {
+                                    user_map.insert(user.id.clone(), user);
+                                }
+                            }
+
+                            let mut writer = output::color::ColorWriter::new(cli.no_color);
+
+                            // Show channel info header
+                            writer.print_header(&format!("#{} ({})", channel.name, channel.id))?;
+                            if let Some(topic) = &channel.topic {
+                                if !topic.value.is_empty() {
+                                    writer.print_field("Topic", &topic.value)?;
+                                }
+                            }
+                            writer.print_separator()?;
+
+                            // Show the message
+                            output::message_formatter::format_messages_with_thread_info(
+                                &[message.clone()],
+                                &channel,
+                                &user_map,
+                                &std::collections::HashMap::new(),
+                                &mut writer,
+                            )?;
+
+                            writer.into_string()?
+                        }
+                    };
+                }
+            } else {
+                // No message timestamp - show channel info
+                final_output = match cli.format.as_str() {
+                    "json" => serde_json::to_string_pretty(&channel)?,
+                    "yaml" => serde_yaml::to_string(&channel)?,
+                    _ => {
+                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                        output::channel_formatter::format_channels_list(&[channel], &mut writer)?;
+                        writer.into_string()?
+                    }
+                };
             }
         }
     }
