@@ -1169,24 +1169,38 @@ async fn main() -> Result<()> {
                             if records.is_empty() {
                                 eprintln!("No cached users found.");
                             } else {
-                                for record in records {
-                                    match cli.format.as_str() {
-                                        "yaml" => {
-                                            let user: serde_json::Value =
-                                                serde_json::from_str(&record.full_object)?;
-                                            println!("---");
-                                            println!("# Cache ID: {}", record.id);
-                                            println!("# Cached at: {}", record.cached_at);
-                                            println!("{}", serde_yaml::to_string(&user)?);
+                                match cli.format.as_str() {
+                                    "json" => {
+                                        // Collect all users into an array
+                                        let users: Vec<serde_json::Value> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_object).ok())
+                                            .collect();
+                                        final_output = serde_json::to_string_pretty(&users)?;
+                                    }
+                                    "yaml" => {
+                                        let users: Vec<serde_json::Value> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_object).ok())
+                                            .collect();
+                                        final_output = serde_yaml::to_string(&users)?;
+                                    }
+                                    _ => {
+                                        // Human format - deserialize and use formatter
+                                        let users: Vec<models::user::User> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_object).ok())
+                                            .collect();
+                                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                                        writer.print_header(&format!("Cached Users ({} of {})", users.len(), records.len()))?;
+                                        writer.print_separator()?;
+                                        for (i, user) in users.iter().enumerate() {
+                                            output::user_formatter::format_user(user, &mut writer)?;
+                                            if i < users.len() - 1 {
+                                                writer.writeln()?;
+                                            }
                                         }
-                                        _ => {
-                                            // JSON is default for cache commands
-                                            println!(
-                                                "// Cache ID: {}, Cached at: {}",
-                                                record.id, record.cached_at
-                                            );
-                                            println!("{}", record.full_object);
-                                        }
+                                        final_output = writer.into_string()?;
                                     }
                                 }
                             }
@@ -1202,23 +1216,32 @@ async fn main() -> Result<()> {
                             if records.is_empty() {
                                 eprintln!("No cached conversations found.");
                             } else {
-                                for record in records {
-                                    match cli.format.as_str() {
-                                        "yaml" => {
-                                            let conv: serde_json::Value =
-                                                serde_json::from_str(&record.full_object)?;
-                                            println!("---");
-                                            println!("# Cache ID: {}", record.id);
-                                            println!("# Cached at: {}", record.cached_at);
-                                            println!("{}", serde_yaml::to_string(&conv)?);
-                                        }
-                                        _ => {
-                                            println!(
-                                                "// Cache ID: {}, Cached at: {}",
-                                                record.id, record.cached_at
-                                            );
-                                            println!("{}", record.full_object);
-                                        }
+                                match cli.format.as_str() {
+                                    "json" => {
+                                        let channels: Vec<serde_json::Value> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_object).ok())
+                                            .collect();
+                                        final_output = serde_json::to_string_pretty(&channels)?;
+                                    }
+                                    "yaml" => {
+                                        let channels: Vec<serde_json::Value> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_object).ok())
+                                            .collect();
+                                        final_output = serde_yaml::to_string(&channels)?;
+                                    }
+                                    _ => {
+                                        // Human format - deserialize and use formatter
+                                        let channels: Vec<models::channel::Channel> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_object).ok())
+                                            .collect();
+                                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                                        writer.print_header(&format!("Cached Conversations ({} of {})", channels.len(), records.len()))?;
+                                        writer.print_separator()?;
+                                        output::channel_formatter::format_channels_list(&channels, &mut writer)?;
+                                        final_output = writer.into_string()?;
                                     }
                                 }
                             }
@@ -1234,26 +1257,38 @@ async fn main() -> Result<()> {
                             if records.is_empty() {
                                 eprintln!("No cached messages found.");
                             } else {
-                                for record in records {
-                                    match cli.format.as_str() {
-                                        "yaml" => {
-                                            let msg: serde_json::Value =
-                                                serde_json::from_str(&record.full_object)?;
-                                            println!("---");
-                                            println!(
-                                                "# Cache ID: {}:{}",
-                                                record.conversation_id, record.ts
-                                            );
-                                            println!("# Cached at: {}", record.cached_at);
-                                            println!("{}", serde_yaml::to_string(&msg)?);
+                                match cli.format.as_str() {
+                                    "json" => {
+                                        let messages: Vec<serde_json::Value> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_object).ok())
+                                            .collect();
+                                        final_output = serde_json::to_string_pretty(&messages)?;
+                                    }
+                                    "yaml" => {
+                                        let messages: Vec<serde_json::Value> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_object).ok())
+                                            .collect();
+                                        final_output = serde_yaml::to_string(&messages)?;
+                                    }
+                                    _ => {
+                                        // Human format - use compact message format
+                                        let messages: Vec<models::message::Message> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_object).ok())
+                                            .collect();
+                                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                                        writer.print_header(&format!("Cached Messages ({} of {})", messages.len(), records.len()))?;
+                                        writer.print_separator()?;
+                                        let user_map = std::collections::HashMap::new();
+                                        for (i, msg) in messages.iter().enumerate() {
+                                            output::message_formatter::format_message_compact(msg, &user_map, &mut writer)?;
+                                            if i < messages.len() - 1 {
+                                                writer.writeln()?;
+                                            }
                                         }
-                                        _ => {
-                                            println!(
-                                                "// Cache ID: {}:{}, Cached at: {}",
-                                                record.conversation_id, record.ts, record.cached_at
-                                            );
-                                            println!("{}", record.full_object);
-                                        }
+                                        final_output = writer.into_string()?;
                                     }
                                 }
                             }
@@ -1269,23 +1304,53 @@ async fn main() -> Result<()> {
                             if records.is_empty() {
                                 eprintln!("No cached events found.");
                             } else {
-                                for record in records {
-                                    match cli.format.as_str() {
-                                        "yaml" => {
-                                            let event: serde_json::Value =
-                                                serde_json::from_str(&record.full_payload)?;
-                                            println!("---");
-                                            println!("# Cache ID: {}", record.event_id);
-                                            println!("# Cached at: {}", record.cached_at);
-                                            println!("{}", serde_yaml::to_string(&event)?);
+                                match cli.format.as_str() {
+                                    "json" => {
+                                        let events: Vec<serde_json::Value> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_payload).ok())
+                                            .collect();
+                                        final_output = serde_json::to_string_pretty(&events)?;
+                                    }
+                                    "yaml" => {
+                                        let events: Vec<serde_json::Value> = records
+                                            .iter()
+                                            .filter_map(|r| serde_json::from_str(&r.full_payload).ok())
+                                            .collect();
+                                        final_output = serde_yaml::to_string(&events)?;
+                                    }
+                                    _ => {
+                                        // Human format - show compact event info
+                                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                                        writer.print_header(&format!("Cached Events ({})", records.len()))?;
+                                        writer.print_separator()?;
+                                        for (i, record) in records.iter().enumerate() {
+                                            // Show event_id, type, channel, user, timestamp
+                                            writer.print_colored(&record.event_id, termcolor::Color::Yellow)?;
+                                            writer.write(" ")?;
+                                            writer.print_colored(&record.event_type, termcolor::Color::Cyan)?;
+                                            if let Some(ch) = &record.channel_id {
+                                                writer.write(&format!(" #{}", ch))?;
+                                            }
+                                            if let Some(u) = &record.user_id {
+                                                writer.write(&format!(" @{}", u))?;
+                                            }
+                                            writer.writeln()?;
+                                            // Show text preview if available
+                                            if let Some(text) = &record.message_text {
+                                                let preview: String = text.chars().take(80).collect();
+                                                writer.write("  ")?;
+                                                writer.write(&preview)?;
+                                                if text.len() > 80 {
+                                                    writer.write("...")?;
+                                                }
+                                                writer.writeln()?;
+                                            }
+                                            if i < records.len() - 1 {
+                                                writer.writeln()?;
+                                            }
                                         }
-                                        _ => {
-                                            println!(
-                                                "// Cache ID: {}, Cached at: {}",
-                                                record.event_id, record.cached_at
-                                            );
-                                            println!("{}", record.full_payload);
-                                        }
+                                        final_output = writer.into_string()?;
                                     }
                                 }
                             }
@@ -1308,17 +1373,22 @@ async fn main() -> Result<()> {
 
                         match record {
                             Some(r) => {
-                                println!(
-                                    "// Cache ID: {}, Cached at: {}",
-                                    r.id, r.cached_at
-                                );
                                 match cli.format.as_str() {
+                                    "json" => {
+                                        final_output = r.full_object;
+                                    }
                                     "yaml" => {
                                         let user: serde_json::Value =
                                             serde_json::from_str(&r.full_object)?;
-                                        println!("{}", serde_yaml::to_string(&user)?);
+                                        final_output = serde_yaml::to_string(&user)?;
                                     }
-                                    _ => println!("{}", r.full_object),
+                                    _ => {
+                                        // Human format
+                                        let user: models::user::User = serde_json::from_str(&r.full_object)?;
+                                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                                        output::user_formatter::format_user(&user, &mut writer)?;
+                                        final_output = writer.into_string()?;
+                                    }
                                 }
                             }
                             None => eprintln!("User '{}' not found in cache.", id),
@@ -1333,17 +1403,22 @@ async fn main() -> Result<()> {
 
                         match record {
                             Some(r) => {
-                                println!(
-                                    "// Cache ID: {}, Cached at: {}",
-                                    r.id, r.cached_at
-                                );
                                 match cli.format.as_str() {
+                                    "json" => {
+                                        final_output = r.full_object;
+                                    }
                                     "yaml" => {
                                         let conv: serde_json::Value =
                                             serde_json::from_str(&r.full_object)?;
-                                        println!("{}", serde_yaml::to_string(&conv)?);
+                                        final_output = serde_yaml::to_string(&conv)?;
                                     }
-                                    _ => println!("{}", r.full_object),
+                                    _ => {
+                                        // Human format
+                                        let channel: models::channel::Channel = serde_json::from_str(&r.full_object)?;
+                                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                                        output::channel_formatter::format_channels_list(&[channel], &mut writer)?;
+                                        final_output = writer.into_string()?;
+                                    }
                                 }
                             }
                             None => eprintln!("Conversation '{}' not found in cache.", id),
@@ -1367,17 +1442,31 @@ async fn main() -> Result<()> {
 
                         match record {
                             Some(r) => {
-                                println!(
-                                    "// Cache ID: {}:{}, Cached at: {}",
-                                    r.conversation_id, r.ts, r.cached_at
-                                );
                                 match cli.format.as_str() {
+                                    "json" => {
+                                        final_output = r.full_object;
+                                    }
                                     "yaml" => {
                                         let msg: serde_json::Value =
                                             serde_json::from_str(&r.full_object)?;
-                                        println!("{}", serde_yaml::to_string(&msg)?);
+                                        final_output = serde_yaml::to_string(&msg)?;
                                     }
-                                    _ => println!("{}", r.full_object),
+                                    _ => {
+                                        // Human format - use compact message format
+                                        let msg: models::message::Message = serde_json::from_str(&r.full_object)?;
+                                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                                        let user_map = std::collections::HashMap::new();
+                                        let thread_info = std::collections::HashMap::new();
+                                        output::message_formatter::format_single_message(
+                                            &msg,
+                                            parts[0], // channel_id
+                                            parts[0], // channel_name (use id as fallback)
+                                            &user_map,
+                                            &thread_info,
+                                            &mut writer,
+                                        )?;
+                                        final_output = writer.into_string()?;
+                                    }
                                 }
                             }
                             None => eprintln!("Message '{}' not found in cache.", id),
@@ -1392,17 +1481,35 @@ async fn main() -> Result<()> {
 
                         match record {
                             Some(r) => {
-                                println!(
-                                    "// Cache ID: {}, Cached at: {}",
-                                    r.event_id, r.cached_at
-                                );
                                 match cli.format.as_str() {
+                                    "json" => {
+                                        final_output = r.full_payload;
+                                    }
                                     "yaml" => {
                                         let event: serde_json::Value =
                                             serde_json::from_str(&r.full_payload)?;
-                                        println!("{}", serde_yaml::to_string(&event)?);
+                                        final_output = serde_yaml::to_string(&event)?;
                                     }
-                                    _ => println!("{}", r.full_payload),
+                                    _ => {
+                                        // Human format - show event details
+                                        let mut writer = output::color::ColorWriter::new(cli.no_color);
+                                        writer.print_header(&format!("Event: {}", r.event_id))?;
+                                        writer.print_separator()?;
+                                        writer.print_field("Type", &r.event_type)?;
+                                        if let Some(ch) = &r.channel_id {
+                                            writer.print_field("Channel", ch)?;
+                                        }
+                                        if let Some(u) = &r.user_id {
+                                            writer.print_field("User", u)?;
+                                        }
+                                        writer.print_field("Event Time", &r.event_time.to_string())?;
+                                        writer.print_field("Cached At", &r.cached_at.to_string())?;
+                                        if let Some(text) = &r.message_text {
+                                            writer.writeln()?;
+                                            writer.print_field("Text", text)?;
+                                        }
+                                        final_output = writer.into_string()?;
+                                    }
                                 }
                             }
                             None => eprintln!("Event '{}' not found in cache.", id),

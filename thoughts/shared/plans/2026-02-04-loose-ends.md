@@ -1508,11 +1508,16 @@ Keep `#[allow(dead_code)]` on:
 - messages: `CHANNEL_ID:TIMESTAMP` (e.g., `C123:1234567890.123456`)
 - events: `EVENT_ID` (e.g., `Ev123ABC`)
 
-**Output:**
-- Default limit of 16 records
-- Shows full API object from `full_object`/`full_payload` field
-- Includes cache metadata (Cache ID, Cached at timestamp)
-- Supports `--format yaml` output
+**Output Formats (follows standard formatting rules):**
+- `human` (default): Uses existing formatters (`user_formatter`, `channel_formatter`, `message_formatter`) for readable output
+- `json`: Outputs raw JSON array/object
+- `yaml`: Outputs YAML format
+
+**Human Format Details:**
+- Users: Full user details via `format_user()`
+- Conversations: Channel list via `format_channels_list()`
+- Messages: Compact format via `format_message_compact()`
+- Events: Custom format showing event_id, type, channel, user, event_time, and message text preview
 
 ### Known Issues
 
