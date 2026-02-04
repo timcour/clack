@@ -29,6 +29,7 @@ fn format_pagination(pagination: &SearchPagination, writer: &mut ColorWriter) ->
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn format_search_messages(
     response: &SearchMessagesResponse,
     users: &HashMap<String, User>,
@@ -60,6 +61,48 @@ pub fn format_search_messages(
     }
 
     Ok(())
+}
+
+/// Format search header for progressive output
+pub fn format_search_messages_header(
+    query: &str,
+    total: u32,
+    writer: &mut ColorWriter,
+) -> Result<()> {
+    writer.print_header(&format!(
+        "Found {} message{} matching '{}'",
+        total,
+        if total == 1 { "" } else { "s" },
+        query
+    ))?;
+    writer.print_separator()?;
+    Ok(())
+}
+
+/// Format search files header for progressive output
+pub fn format_search_files_header(
+    query: &str,
+    total: u32,
+    writer: &mut ColorWriter,
+) -> Result<()> {
+    writer.print_header(&format!(
+        "Found {} file{} matching '{}'",
+        total,
+        if total == 1 { "" } else { "s" },
+        query
+    ))?;
+    writer.print_separator()?;
+    Ok(())
+}
+
+/// Format a single file for progressive output
+pub fn format_single_file(file: &FileResult, writer: &mut ColorWriter) -> Result<()> {
+    format_file(file, writer)
+}
+
+/// Format pagination for progressive output
+pub fn format_search_pagination(pagination: &SearchPagination, writer: &mut ColorWriter) -> Result<()> {
+    format_pagination(pagination, writer)
 }
 
 pub fn format_search_message(
@@ -144,6 +187,7 @@ pub fn format_search_message(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn format_search_files(response: &SearchFilesResponse, writer: &mut ColorWriter) -> Result<()> {
     writer.print_header(&format!(
         "Found {} file{} matching '{}'",
@@ -174,6 +218,7 @@ pub fn format_search_files(response: &SearchFilesResponse, writer: &mut ColorWri
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn format_search_all(
     response: &SearchAllResponse,
     users: &HashMap<String, User>,

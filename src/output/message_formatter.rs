@@ -61,6 +61,7 @@ pub fn format_messages_with_thread_info(
 }
 
 /// Backward compatibility wrapper - formats messages without thread info
+#[allow(dead_code)]
 pub fn format_messages(
     messages: &[Message],
     channel: &Channel,
@@ -69,6 +70,54 @@ pub fn format_messages(
 ) -> Result<()> {
     let empty_thread_info = HashMap::new();
     format_messages_with_thread_info(messages, channel, users, &empty_thread_info, writer)
+}
+
+/// Format just the channel header for progressive output
+pub fn format_channel_header(channel: &Channel, writer: &mut ColorWriter) -> Result<()> {
+    // Channel metadata summary
+    writer.print_header(&format!("#{} ({})", channel.name, channel.id))?;
+
+    // Topic if present
+    if let Some(topic) = &channel.topic {
+        if !topic.value.is_empty() {
+            writer.print_field("Topic", &topic.value)?;
+        }
+    }
+
+    // Purpose if present
+    if let Some(purpose) = &channel.purpose {
+        if !purpose.value.is_empty() {
+            writer.print_field("Purpose", &purpose.value)?;
+        }
+    }
+
+    // Member count if present
+    if let Some(num_members) = channel.num_members {
+        writer.print_field("Members", &num_members.to_string())?;
+    }
+
+    // Privacy status
+    let privacy = if channel.is_private == Some(true) {
+        "Private"
+    } else {
+        "Public"
+    };
+    writer.print_field("Privacy", privacy)?;
+
+    writer.print_separator()?;
+    Ok(())
+}
+
+/// Format a single message for progressive output
+pub fn format_single_message(
+    msg: &Message,
+    channel_name: &str,
+    channel_id: &str,
+    users: &HashMap<String, User>,
+    thread_info: &HashMap<String, (usize, Vec<String>)>,
+    writer: &mut ColorWriter,
+) -> Result<()> {
+    format_message(msg, channel_name, channel_id, users, thread_info, writer)
 }
 
 fn format_message(

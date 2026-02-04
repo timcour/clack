@@ -5,6 +5,7 @@ pub mod file_formatter;
 pub mod message_formatter;
 pub mod pager;
 pub mod pin_formatter;
+pub mod progressive;
 pub mod search_formatter;
 pub mod thread_formatter;
 pub mod user_formatter;

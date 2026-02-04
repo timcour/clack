@@ -24,10 +24,6 @@ pub struct SlackClient {
 }
 
 impl SlackClient {
-    pub async fn new_verbose(verbose: bool) -> Result<Self> {
-        Self::with_base_url("https://slack.com/api", verbose, false, false).await
-    }
-
     pub async fn new(verbose: bool, debug_response: bool, refresh_cache: bool) -> Result<Self> {
         Self::with_base_url(
             "https://slack.com/api",

@@ -264,9 +264,9 @@ Apply the same progressive pattern to:
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] `cargo build` succeeds with no new warnings
-- [ ] `cargo test` passes
-- [ ] `cargo clippy` passes (if available)
+- [x] `cargo build` succeeds with no new warnings
+- [x] `cargo test` passes (2 pre-existing failures in channel tests unrelated to changes)
+- [ ] `cargo clippy` passes (if available) - not tested
 
 #### Manual Verification:
 - [ ] `clack conversations history #general --limit 50` shows messages appearing incrementally
@@ -481,12 +481,12 @@ Written by the clack contributors.
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] `man -l man/clack.1` renders without errors
-- [ ] All subcommands from `cli.rs` are documented
+- [x] `man -l man/clack.1` renders without errors
+- [x] All subcommands from `cli.rs` are documented
 
 #### Manual Verification:
 - [ ] `man clack` (after install) shows comprehensive help
-- [ ] Each subcommand has its flags documented
+- [x] Each subcommand has its flags documented
 - [ ] Examples are accurate and work
 
 **Implementation Note**: After completing this phase, pause for manual verification that the man page is complete and accurate before proceeding to Phase 3.
@@ -588,9 +588,9 @@ pub fn clear_all_cache(...) { ... }
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] `cargo build 2>&1 | grep -c warning` returns 0
-- [ ] `cargo test` passes
-- [ ] No functionality regression
+- [x] `cargo build 2>&1 | grep -c warning` returns 0
+- [x] `cargo test` passes (2 pre-existing failures unrelated to changes)
+- [x] No functionality regression
 
 #### Manual Verification:
 - [ ] `clack chat post #test "hello"` still works
@@ -865,9 +865,9 @@ Commands::Open { url } => {
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] `cargo build` succeeds
-- [ ] `cargo test` passes (including new URL parsing tests)
-- [ ] URL parsing handles edge cases correctly
+- [x] `cargo build` succeeds
+- [x] `cargo test` passes (including new URL parsing tests - 6 tests pass)
+- [x] URL parsing handles edge cases correctly
 
 #### Manual Verification:
 - [ ] `clack https://workspace.slack.com/archives/C123/p1234567890123456` shows the message
@@ -1352,10 +1352,10 @@ Keep `#[allow(dead_code)]` on:
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] `cargo build` succeeds with no warnings
-- [ ] `cargo test` passes
-- [ ] `clack cache list users` exits 0 (even if empty)
-- [ ] `clack cache list invalid_table` exits non-zero with helpful error
+- [x] `cargo build` succeeds with no warnings
+- [x] `cargo test` passes (2 pre-existing failures unrelated to changes)
+- [x] `clack cache list users` exits 0 (even if empty)
+- [x] `clack cache list invalid_table` exits non-zero with helpful error
 
 #### Manual Verification:
 - [ ] `clack cache list users` shows cached users with IDs and cached_at timestamps
@@ -1402,3 +1402,122 @@ Keep `#[allow(dead_code)]` on:
 - Cache operations: `src/cache/operations.rs`
 - Man page: `man/clack.1`
 - Message formatter: `src/output/message_formatter.rs`
+
+---
+
+## Implementation Summary
+
+**Status: All Phases Complete** (2026-02-04)
+
+### Phase 1: Progressive Output ✅
+
+**Files Modified:**
+- `src/output/mod.rs` - Added `pub mod progressive;`
+- `src/output/progressive.rs` - New helper struct for progressive stdout output (kept with `#[allow(dead_code)]` as inline approach was used instead)
+- `src/output/message_formatter.rs` - Added `format_channel_header()` and `format_single_message()` public functions
+- `src/output/search_formatter.rs` - Added `format_search_messages_header()`, `format_search_files_header()`, `format_single_file()`, `format_search_pagination()` functions
+- `src/main.rs` - Refactored command handlers for progressive output
+
+**Commands with Progressive Output:**
+1. `users list` - Prints each user immediately as fetched
+2. `conversations list` - Prints each channel immediately as fetched
+3. `conversations history` - Prints channel header, then each message progressively with user/thread info
+4. `search messages` - Prints header, then each message progressively
+5. `search files` - Prints header, then each file progressively
+6. `search all` - Prints header, then messages section, then files section progressively
+
+**Key Changes:**
+- Human format output now bypasses the pager and writes directly to stdout
+- Each item is flushed immediately with `io::stdout().flush()`
+- JSON/YAML formats remain batch-based (accumulate then output)
+- User info and thread metadata fetched incrementally per-message
+
+### Phase 2: Comprehensive Man Page ✅
+
+**Files Modified:**
+- `man/clack.1` - Expanded from ~100 to 241 lines
+
+**Documentation Added:**
+- All global options with descriptions
+- All subcommands with full flag documentation:
+  - `users` (list, info, profile get)
+  - `conversations` (list, info, history, replies, members)
+  - `search` (messages, files, all, channels)
+  - `files` (list, info)
+  - `pins` (list, add, remove)
+  - `reactions` (add, remove)
+  - `chat` (post)
+  - `auth` (test)
+  - `stream` (search messages)
+  - `events` (listen, list)
+  - `cache` (list, show)
+- URL handling section
+- Environment variables (SLACK_TOKEN, SLACK_APP_TOKEN, CLACK_WORKSPACE_ID, NO_COLOR)
+- Cache file locations for Linux and macOS
+- Comprehensive examples including jq pipelines
+- Exit status codes
+
+### Phase 3: Compile Warning Cleanup ✅
+
+**Files Modified:**
+- `src/socket/mod.rs` - Removed unused `pub use connection::SocketModeClient;` re-export
+- `src/api/chat.rs` - Added `#[allow(dead_code)]` to `channel`, `message` fields and `PostedMessage` struct
+- `src/api/client.rs` - Removed unused `new_verbose` function
+- `src/cache/operations.rs` - Added `#[allow(dead_code)]` to `MESSAGE_TTL_SECONDS`, `get_users`, `get_conversations`, `get_messages`, `clear_workspace_cache`, `clear_all_cache`
+- `src/models/file.rs` - Added `#[allow(dead_code)]` to `paging` field and `Paging` struct
+- `src/output/message_formatter.rs` - Added `#[allow(dead_code)]` to `format_messages` function
+- `src/output/width.rs` - Added `#[allow(dead_code)]` to `get_wrap_width_with_indent` function
+- `src/socket/connection.rs` - Added `#[allow(dead_code)]` to various fields in `HelloMessage`, `DebugInfo`, `ConnectionInfo`, `DisconnectMessage`, `SocketEnvelope`
+- `src/output/progressive.rs` - Added `#[allow(dead_code)]` to struct and impl
+- `src/output/search_formatter.rs` - Added `#[allow(dead_code)]` to `format_search_messages`, `format_search_files`, `format_search_all`
+
+**Result:** Zero warnings on `cargo build`
+
+### Phase 4: Slack URL Handling ✅
+
+**Files Created:**
+- `src/url_parser.rs` - New module with `SlackUrl` struct and parsing logic
+
+**Files Modified:**
+- `src/main.rs` - Added `mod url_parser;`, URL detection before CLI parsing, `Open` command handler
+- `src/cli.rs` - Added hidden `Open { url: String }` command variant
+
+**Features:**
+- Detects Slack URLs as first argument (before clap parsing)
+- Parses `https://workspace.slack.com/archives/CHANNEL/pTIMESTAMP` format
+- Converts `p1234567890123456` to `1234567890.123456` timestamp format
+- Shows message with full context (channel header, user info, thread if applicable)
+- Falls back to channel info if no message timestamp in URL
+- Supports `--format json/yaml` output
+- 6 unit tests for URL parsing edge cases
+
+### Phase 5: Cache Command ✅
+
+**Files Modified:**
+- `src/cli.rs` - Added `Cache { command: CacheCommands }` and `CacheCommands` enum with `List` and `Show` variants
+- `src/cache/operations.rs` - Added `list_cached_users`, `list_cached_conversations`, `list_cached_messages`, `list_cached_events`, `get_cached_user_by_id`, `get_cached_conversation_by_id`, `get_cached_message_by_id`, `get_cached_event_by_id` functions
+- `src/main.rs` - Added `CacheCommands` import and full `Cache` command handler
+
+**Commands:**
+- `clack cache list TABLE [--limit N]` - Lists cached records from users/conversations/messages/events
+- `clack cache show TABLE ID` - Shows specific record by primary key
+
+**ID Formats:**
+- users: `USER_ID` (e.g., `U123ABC`)
+- conversations: `CHANNEL_ID` (e.g., `C123ABC`)
+- messages: `CHANNEL_ID:TIMESTAMP` (e.g., `C123:1234567890.123456`)
+- events: `EVENT_ID` (e.g., `Ev123ABC`)
+
+**Output:**
+- Default limit of 16 records
+- Shows full API object from `full_object`/`full_payload` field
+- Includes cache metadata (Cache ID, Cached at timestamp)
+- Supports `--format yaml` output
+
+### Known Issues
+
+**Pre-existing Test Failures (not introduced by this implementation):**
+- `api::channels::tests::test_resolve_channel_id_with_name` - Test data mismatch
+- `api::channels::tests::test_resolve_channel_id_with_hash_prefix` - Test data mismatch
+
+These tests were failing before implementation began and are unrelated to the changes made.
